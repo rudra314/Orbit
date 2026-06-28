@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+/* Class-based dark mode: `dark:` utilities activate under the `.dark` class. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ----------------------------------------------------------------
+   Orbit design tokens. UI must read these custom properties — never
+   hardcode hex in components. (Per-org/project accent colors stored
+   in the DB are data and are applied via inline style at runtime.)
+----------------------------------------------------------------- */
+:root {
+  --background: #ffffff;
+  --foreground: #18212f;
+  --card: #ffffff;
+  --card-foreground: #18212f;
+  --muted: #f4f5f7;
+  --muted-foreground: #5e6c84;
+  --border: #e3e6ea;
+  --input: #e3e6ea;
+  --ring: #0f6e56;
+
+  --primary: #0f6e56;
+  --primary-foreground: #ffffff;
+
+  --sidebar: #0c1b2e;
+  --sidebar-foreground: #c7d2e0;
+  --sidebar-muted: #8597ad;
+  --sidebar-active: #15314f;
+  --sidebar-border: #1b2f49;
+
+  --danger: #de350b;
+  --warning: #ff8b00;
+  --success: #0f6e56;
+}
+
+.dark {
+  --background: #0b0f14;
+  --foreground: #e6edf3;
+  --card: #131820;
+  --card-foreground: #e6edf3;
+  --muted: #1a212b;
+  --muted-foreground: #8b98a8;
+  --border: #232b36;
+  --input: #232b36;
+  --ring: #2bb894;
+
+  --primary: #2bb894;
+  --primary-foreground: #07120e;
+
+  --sidebar: #080c11;
+  --sidebar-foreground: #c7d2e0;
+  --sidebar-muted: #6b7a8d;
+  --sidebar-active: #161d27;
+  --sidebar-border: #1c242f;
+}
+
+/* Map tokens to Tailwind color utilities (bg-background, text-foreground, …). */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-muted: var(--sidebar-muted);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-danger: var(--danger);
+  --color-warning: var(--warning);
+  --color-success: var(--success);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}

@@ -1,0 +1,1149 @@
+// ============================================================
+// ORBIT — AI Native Delivery Management Platform
+// Prisma Schema v3.0
+// Matches PRD v3.0 (Internal Pilot)
+// Author: Raghuram, PM, Solutions Engineering, Innominds
+// Date: June 25, 2026
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================================
+// 1. ORGANIZATION & USERS
+// ============================================================
+
+model Organization {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  logoUrl     String?  @map("logo_url")
+  accentColor String   @default("#0F6E56") @map("accent_color")
+  plan        String   @default("pilot") // pilot, internal, enterprise
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  members     OrgMember[]
+  projects    Project[]
+  audits      AuditLog[]
+  invitations Invitation[]
+
+  @@map("organizations")
+}
+
+model User {
+  id             String    @id @default(uuid())
+  email          String    @unique
+  name           String
+  avatarUrl      String?   @map("avatar_url")
+  themePref      String    @default("system") @map("theme_pref") // light, dark, system
+  provider       String    @default("magic_link") // magic_link, microsoft
+  providerUserId String?   @map("provider_user_id") // M365 oid
+  lastLogin      DateTime? @map("last_login")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  orgMemberships     OrgMember[]
+  projectMemberships ProjectMember[]
+  assignedWorkItems  WorkItem[]       @relation("AssignedTo")
+  reportedWorkItems  WorkItem[]       @relation("ReportedBy")
+  assignedSubtasks   Subtask[]
+  comments           Comment[]
+  activities         ActivityLog[]
+  audits             AuditLog[]
+  notifications      Notification[]
+  createdTestCases   TestCase[]
+  testExecutions     TestExecution[]
+  createdLinks       WorkItemLink[]
+  aiGenerations      AiGeneration[]   @relation("GeneratedBy")
+  aiApprovals        AiGeneration[]   @relation("ApprovedBy")
+  uploadedDocuments  SourceDocument[] @relation("UploadedBy")
+  decisionOwner      DecisionLog[]
+  uploadedFiles      Attachment[]
+
+  @@map("users")
+}
+
+model OrgMember {
+  id       String   @id @default(uuid())
+  orgId    String   @map("org_id")
+  userId   String   @map("user_id")
+  role     OrgRole  @default(MEMBER)
+  joinedAt DateTime @default(now()) @map("joined_at")
+
+  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, userId])
+  @@map("org_members")
+}
+
+enum OrgRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+model Invitation {
+  id        String           @id @default(uuid())
+  orgId     String           @map("org_id")
+  projectId String?          @map("project_id")
+  email     String
+  role      ProjectRole      @default(CONTRIBUTOR)
+  discipline Discipline?
+  message   String?
+  status    InvitationStatus @default(PENDING)
+  invitedBy String           @map("invited_by")
+  expiresAt DateTime         @map("expires_at")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  org     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  project Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([email, status])
+  @@map("invitations")
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+}
+
+// ============================================================
+// 2. PROJECTS & TEAM
+// ============================================================
+
+model Project {
+  id             String        @id @default(uuid())
+  orgId          String        @map("org_id")
+  name           String
+  key            String        // e.g. "ORB" — used in item keys like ORB-123
+  description    String?       @db.Text
+  type           ProjectType   @default(INTERNAL)
+  estimationMode EstimationMode @default(BOTH) @map("estimation_mode")
+  accentColor    String        @default("#0F6E56") @map("accent_color")
+  status         ProjectStatus @default(ACTIVE)
+  nextItemNumber Int           @default(1) @map("next_item_number") // atomic key gen
+  startDate      DateTime?     @map("start_date")
+  targetDate     DateTime?     @map("target_date")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  org              Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  members          ProjectMember[]
+  aiConfig         ProjectAiConfig?
+  epics            Epic[]
+  features         Feature[]
+  workItems        WorkItem[]
+  sprints          Sprint[]
+  workflowStatuses WorkflowStatus[]
+  deliverables     Deliverable[]
+  labels           Label[]
+  customFieldDefs  CustomFieldDefinition[]
+  activities       ActivityLog[]
+  notifications    Notification[]
+  sourceDocuments  SourceDocument[]
+  invitations      Invitation[]
+  decisionLogs     DecisionLog[]
+  testRuns         TestRun[]
+  weeklyReports    WeeklyReport[]
+  integrations     IntegrationConnection[]
+
+  @@unique([orgId, key])
+  @@index([orgId, status])
+  @@map("projects")
+}
+
+enum ProjectType {
+  INTERNAL
+  FIXED_BID
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  ARCHIVED
+}
+
+enum EstimationMode {
+  STORY_POINTS
+  HOURS
+  BOTH
+  NONE
+}
+
+model ProjectMember {
+  id         String      @id @default(uuid())
+  projectId  String      @map("project_id")
+  userId     String      @map("user_id")
+  role       ProjectRole @default(CONTRIBUTOR)
+  discipline Discipline  @default(DEVELOPMENT)
+  joinedAt   DateTime    @default(now()) @map("joined_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@map("project_members")
+}
+
+enum ProjectRole {
+  PM
+  LEAD
+  CONTRIBUTOR
+  VIEWER
+  GUEST
+}
+
+enum Discipline {
+  PRODUCT
+  UX
+  DEVELOPMENT
+  QE
+  DEVOPS
+  ARCHITECTURE
+  DELIVERY
+  OTHER
+}
+
+// ============================================================
+// 3. PROJECT AI CONFIGURATION (per-project LLM settings)
+// ============================================================
+
+model ProjectAiConfig {
+  id                String    @id @default(uuid())
+  projectId         String    @unique @map("project_id")
+  aiMode            AiMode    @default(DISABLED) @map("ai_mode")
+  provider          String?   // anthropic, ollama, openai_compatible, custom
+  model             String?   // claude-sonnet-4-6, llama3.3:70b, etc.
+  baseUrl           String?   @map("base_url") // http://localhost:11434 for Ollama
+  secretRef         String?   @map("secret_ref") // env var name, never raw key
+  externalApiAllowed Boolean  @default(false) @map("external_api_allowed")
+  sowProcessingAllowed Boolean @default(false) @map("sow_processing_allowed")
+  enabledFeatures   Json      @default("[]") @map("enabled_features") // ["backlog_gen","test_case_gen","report_draft"]
+  approvalRule      AiApprovalRule @default(PM_APPROVAL) @map("approval_rule")
+  fallbackRule      String?   @map("fallback_rule") // what to do if AI fails
+  tokenBudget       Int?      @map("token_budget") // monthly token budget
+  costBudget        Float?    @map("cost_budget") // monthly cost budget USD
+  dataSensitivityNote String? @map("data_sensitivity_note") @db.Text
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("project_ai_configs")
+}
+
+enum AiMode {
+  DISABLED
+  LOCAL_MODEL
+  CLOUD_API
+  OPENAI_COMPATIBLE
+}
+
+enum AiApprovalRule {
+  PM_APPROVAL         // Only PM can approve
+  PM_OR_LEAD_APPROVAL // PM or Lead can approve
+  ANY_REVIEWER        // Any designated reviewer
+}
+
+// ============================================================
+// 4. WORK HIERARCHY: Epic → Feature → WorkItem → Subtask
+// ============================================================
+
+model Epic {
+  id          String     @id @default(uuid())
+  projectId   String     @map("project_id")
+  title       String
+  description String?    @db.Text
+  status      EpicStatus @default(NOT_STARTED)
+  sortOrder   Int        @default(0) @map("sort_order")
+  startDate   DateTime?  @map("start_date")
+  targetDate  DateTime?  @map("target_date")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  features  Feature[]
+  workItems WorkItem[]
+
+  @@index([projectId, status])
+  @@map("epics")
+}
+
+enum EpicStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+model Feature {
+  id          String        @id @default(uuid())
+  epicId      String        @map("epic_id")
+  projectId   String        @map("project_id")
+  title       String
+  description String?       @db.Text
+  status      FeatureStatus @default(NOT_STARTED)
+  sortOrder   Int           @default(0) @map("sort_order")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  epic      Epic       @relation(fields: [epicId], references: [id], onDelete: Cascade)
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workItems WorkItem[]
+
+  @@index([epicId])
+  @@index([projectId])
+  @@map("features")
+}
+
+enum FeatureStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+model WorkItem {
+  id                 String       @id @default(uuid())
+  projectId          String       @map("project_id")
+  epicId             String?      @map("epic_id")
+  featureId          String?      @map("feature_id")
+  sprintId           String?      @map("sprint_id")
+  statusId           String       @map("status_id")
+  assigneeId         String?      @map("assignee_id")
+  reporterId         String?      @map("reporter_id")
+  itemKey            String       @map("item_key") // e.g. ORB-42
+  type               WorkItemType
+  title              String
+  description        String?      @db.Text
+  acceptanceCriteria String?      @db.Text @map("acceptance_criteria")
+  edgeCases          String?      @db.Text @map("edge_cases")
+  priority           Priority     @default(MEDIUM)
+  severity           Severity?    // Bug-specific
+  discipline         Discipline?  // Which team discipline owns this
+  storyPoints        Int?         @map("story_points")
+  estimatedHours     Float?       @map("estimated_hours")
+  loggedHours        Float        @default(0) @map("logged_hours")
+  businessValue      String?      @map("business_value") @db.Text
+  // Bug-specific fields
+  stepsToReproduce   String?      @map("steps_to_reproduce") @db.Text
+  expectedResult     String?      @map("expected_result") @db.Text
+  actualResult       String?      @map("actual_result") @db.Text
+  environment        String?
+  buildVersion       String?      @map("build_version")
+  verificationStatus VerificationStatus? @map("verification_status")
+  // Spike-specific fields
+  researchQuestion   String?      @map("research_question") @db.Text
+  timeBox            String?      @map("time_box")
+  outcomeSummary     String?      @map("outcome_summary") @db.Text
+  // Task-specific
+  taskCategory       String?      @map("task_category")
+  dueDate            DateTime?    @map("due_date")
+  // Blocker
+  isBlocked          Boolean      @default(false) @map("is_blocked")
+  blockerReason      String?      @map("blocker_reason") @db.Text
+  // Source tracking
+  aiGenerationId     String?      @map("ai_generation_id") // if AI-created
+  importBatchId      String?      @map("import_batch_id")
+  // Metadata
+  sortOrder          Int          @default(0) @map("sort_order")
+  createdAt          DateTime     @default(now()) @map("created_at")
+  updatedAt          DateTime     @updatedAt @map("updated_at")
+
+  project    Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  epic       Epic?            @relation(fields: [epicId], references: [id], onDelete: SetNull)
+  feature    Feature?         @relation(fields: [featureId], references: [id], onDelete: SetNull)
+  sprint     Sprint?          @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  status     WorkflowStatus   @relation(fields: [statusId], references: [id])
+  assignee   User?            @relation("AssignedTo", fields: [assigneeId], references: [id], onDelete: SetNull)
+  reporter   User?            @relation("ReportedBy", fields: [reporterId], references: [id], onDelete: SetNull)
+  subtasks   Subtask[]
+  comments   Comment[]
+  labels     WorkItemLabel[]
+  testCases  TestCase[]
+  linksFrom  WorkItemLink[]   @relation("LinkSource")
+  linksTo    WorkItemLink[]   @relation("LinkTarget")
+  customFieldValues CustomFieldValue[]
+  activities ActivityLog[]
+  audits     AuditLog[]       @relation("AuditedWorkItem")
+  attachments Attachment[]
+
+  @@unique([projectId, itemKey])
+  @@index([projectId, statusId])
+  @@index([projectId, assigneeId])
+  @@index([projectId, sprintId])
+  @@index([projectId, type])
+  @@index([projectId, epicId])
+  @@index([projectId, discipline])
+  @@map("work_items")
+}
+
+enum WorkItemType {
+  STORY
+  BUG
+  TASK
+  SPIKE
+}
+
+enum Priority {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum Severity {
+  BLOCKER
+  CRITICAL
+  MAJOR
+  MINOR
+  TRIVIAL
+}
+
+enum VerificationStatus {
+  NOT_VERIFIED
+  VERIFIED
+  REOPENED
+}
+
+model Subtask {
+  id         String   @id @default(uuid())
+  workItemId String   @map("work_item_id")
+  assigneeId String?  @map("assignee_id")
+  title      String
+  completed  Boolean  @default(false)
+  sortOrder  Int      @default(0) @map("sort_order")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  workItem WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  assignee User?    @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  @@index([workItemId])
+  @@map("subtasks")
+}
+
+// ============================================================
+// 5. WORK ITEM LINKS
+// ============================================================
+
+model WorkItemLink {
+  id           String   @id @default(uuid())
+  sourceItemId String   @map("source_item_id")
+  targetItemId String   @map("target_item_id")
+  linkType     LinkType @map("link_type")
+  createdById  String?  @map("created_by_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  sourceItem WorkItem @relation("LinkSource", fields: [sourceItemId], references: [id], onDelete: Cascade)
+  targetItem WorkItem @relation("LinkTarget", fields: [targetItemId], references: [id], onDelete: Cascade)
+  createdBy  User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([sourceItemId, targetItemId, linkType])
+  @@index([sourceItemId])
+  @@index([targetItemId])
+  @@map("work_item_links")
+}
+
+enum LinkType {
+  RELATES_TO
+  BLOCKS
+  IS_BLOCKED_BY
+  CAUSES
+  IS_CAUSED_BY
+  DUPLICATES
+  IS_DUPLICATED_BY
+  FOUND_IN
+  TESTED_BY
+  DEPENDS_ON
+}
+
+// ============================================================
+// 6. SPRINTS
+// ============================================================
+
+model Sprint {
+  id        String       @id @default(uuid())
+  projectId String       @map("project_id")
+  name      String
+  status    SprintStatus @default(PLANNING)
+  startDate DateTime?    @map("start_date")
+  endDate   DateTime?    @map("end_date")
+  goal      String?      @db.Text
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+
+  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workItems      WorkItem[]
+  testRuns       TestRun[]
+  testExecutions TestExecution[]
+
+  @@index([projectId, status])
+  @@map("sprints")
+}
+
+enum SprintStatus {
+  PLANNING
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+// ============================================================
+// 7. WORKFLOW (Configurable board columns)
+// ============================================================
+
+model WorkflowStatus {
+  id           String         @id @default(uuid())
+  projectId    String         @map("project_id")
+  name         String
+  category     StatusCategory
+  displayOrder Int            @map("display_order")
+  color        String         @default("#6B778C")
+  createdAt    DateTime       @default(now()) @map("created_at")
+
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workItems WorkItem[]
+
+  @@unique([projectId, name])
+  @@index([projectId, displayOrder])
+  @@map("workflow_statuses")
+}
+
+enum StatusCategory {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+// ============================================================
+// 8. QA — TEST CASES, TEST RUNS, TEST EXECUTIONS
+// ============================================================
+
+model TestCase {
+  id             String         @id @default(uuid())
+  workItemId     String         @map("work_item_id")
+  createdById    String?        @map("created_by_id")
+  approvedById   String?        @map("approved_by_id")
+  title          String
+  preconditions  String?        @db.Text
+  steps          Json           // [{ stepNumber, action, expectedResult }]
+  expectedResult String?        @db.Text @map("expected_result")
+  testType       TestType       @default(MANUAL) @map("test_type")
+  priority       Priority       @default(MEDIUM)
+  status         TestCaseStatus @default(DRAFT)
+  aiGenerationId String?        @map("ai_generation_id") // if AI-created
+  sortOrder      Int            @default(0) @map("sort_order")
+  approvedAt     DateTime?      @map("approved_at")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  workItem   WorkItem        @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  createdBy  User?           @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  executions TestExecution[]
+
+  @@index([workItemId, status])
+  @@map("test_cases")
+}
+
+enum TestType {
+  MANUAL
+  AUTOMATED
+}
+
+enum TestCaseStatus {
+  DRAFT
+  ACTIVE
+  REJECTED
+  DEPRECATED
+}
+
+model TestRun {
+  id        String       @id @default(uuid())
+  projectId String       @map("project_id")
+  sprintId  String?      @map("sprint_id")
+  name      String       // e.g. "Sprint 3 regression run"
+  status    TestRunStatus @default(IN_PROGRESS)
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+
+  project    Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sprint     Sprint?         @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  executions TestExecution[]
+
+  @@index([projectId, sprintId])
+  @@map("test_runs")
+}
+
+enum TestRunStatus {
+  IN_PROGRESS
+  COMPLETED
+  ABORTED
+}
+
+model TestExecution {
+  id           String     @id @default(uuid())
+  testCaseId   String     @map("test_case_id")
+  testRunId    String?    @map("test_run_id")
+  sprintId     String?    @map("sprint_id")
+  executedById String?    @map("executed_by_id")
+  bugItemId    String?    @map("bug_item_id")
+  result       TestResult
+  notes        String?    @db.Text
+  executedAt   DateTime   @default(now()) @map("executed_at")
+
+  testCase   TestCase @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+  testRun    TestRun? @relation(fields: [testRunId], references: [id], onDelete: SetNull)
+  sprint     Sprint?  @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  executedBy User?    @relation(fields: [executedById], references: [id], onDelete: SetNull)
+
+  @@index([testCaseId, sprintId])
+  @@index([sprintId, result])
+  @@map("test_executions")
+}
+
+enum TestResult {
+  PASSED
+  FAILED
+  BLOCKED
+  SKIPPED
+  NOT_RUN
+}
+
+// ============================================================
+// 9. AI GOVERNANCE — Templates, Generations, Entity Links
+// ============================================================
+
+model AiPromptTemplate {
+  id          String   @id @default(uuid())
+  name        String   @unique // e.g. "backlog_generation_v2"
+  description String?
+  feature     String   // backlog_gen, test_case_gen, report_draft, risk_summary
+  template    String   @db.Text // the prompt template with {variables}
+  version     Int      @default(1)
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  generations AiGeneration[]
+
+  @@index([feature, isActive])
+  @@map("ai_prompt_templates")
+}
+
+model AiGeneration {
+  id                String             @id @default(uuid())
+  projectId         String             @map("project_id")
+  generatedById     String?            @map("generated_by_id")
+  templateId        String?            @map("template_id")
+  provider          String             // anthropic, ollama, etc.
+  model             String             // claude-sonnet-4-6, llama3.3:70b
+  promptVersion     Int                @map("prompt_version")
+  inputSource       String?            @map("input_source") // pasted_text, document, acceptance_criteria
+  inputHash         String?            @map("input_hash") // hash of input for dedup
+  sourceDocumentId  String?            @map("source_document_id")
+  inputText         String?            @db.Text @map("input_text")
+  generatedJson     Json               @map("generated_json") // the raw AI output
+  status            AiGenerationStatus @default(DRAFT)
+  reviewedById      String?            @map("reviewed_by_id")
+  reviewNote        String?            @map("review_note") @db.Text
+  approvedAt        DateTime?          @map("approved_at")
+  rejectedAt        DateTime?          @map("rejected_at")
+  tokenCount        Int?               @map("token_count")
+  costUsd           Float?             @map("cost_usd")
+  createdAt         DateTime           @default(now()) @map("created_at")
+
+  generatedBy    User?              @relation("GeneratedBy", fields: [generatedById], references: [id])
+  reviewedBy     User?              @relation("ApprovedBy", fields: [reviewedById], references: [id])
+  template       AiPromptTemplate?  @relation(fields: [templateId], references: [id])
+  sourceDocument SourceDocument?    @relation(fields: [sourceDocumentId], references: [id])
+  createdEntities AiGeneratedEntity[]
+
+  @@index([projectId, status])
+  @@index([projectId, createdAt])
+  @@map("ai_generations")
+}
+
+enum AiGenerationStatus {
+  DRAFT
+  EDITED
+  APPROVED
+  REJECTED
+  ARCHIVED
+}
+
+model AiGeneratedEntity {
+  id             String @id @default(uuid())
+  generationId   String @map("generation_id")
+  entityType     String @map("entity_type") // WorkItem, TestCase, Epic, Feature
+  entityId       String @map("entity_id")
+
+  generation AiGeneration @relation(fields: [generationId], references: [id], onDelete: Cascade)
+
+  @@index([generationId])
+  @@index([entityType, entityId])
+  @@map("ai_generated_entities")
+}
+
+// ============================================================
+// 10. DOCUMENTS & ATTACHMENTS
+// ============================================================
+
+model SourceDocument {
+  id               String                @id @default(uuid())
+  projectId        String                @map("project_id")
+  uploadedById     String?               @map("uploaded_by_id")
+  fileName         String                @map("file_name")
+  fileType         String                @map("file_type") // pdf, docx, txt, csv, xlsx
+  fileSize         Int                   @map("file_size") // bytes
+  storagePath      String                @map("storage_path")
+  visibility       DocumentVisibility    @default(INTERNAL)
+  sourceType       String?               @map("source_type") // sow, requirement, design, other
+  processingStatus DocumentProcessingStatus @default(UPLOADED) @map("processing_status")
+  currentVersion   Int                   @default(1) @map("current_version")
+  createdAt        DateTime              @default(now()) @map("created_at")
+  updatedAt        DateTime              @updatedAt @map("updated_at")
+
+  project        Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploadedBy     User?                @relation("UploadedBy", fields: [uploadedById], references: [id])
+  versions       DocumentVersion[]
+  processingJobs DocumentProcessingJob[]
+  aiGenerations  AiGeneration[]
+
+  @@index([projectId, sourceType])
+  @@map("source_documents")
+}
+
+enum DocumentVisibility {
+  INTERNAL
+  TEAM_ONLY
+  CLIENT_VISIBLE // future
+}
+
+enum DocumentProcessingStatus {
+  UPLOADED
+  QUEUED
+  PROCESSING
+  PARSED
+  FAILED
+  ARCHIVED
+}
+
+model DocumentVersion {
+  id           String   @id @default(uuid())
+  documentId   String   @map("document_id")
+  version      Int
+  storagePath  String   @map("storage_path")
+  fileSize     Int      @map("file_size")
+  changeNote   String?  @map("change_note")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  document SourceDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, version])
+  @@map("document_versions")
+}
+
+model DocumentProcessingJob {
+  id           String               @id @default(uuid())
+  documentId   String               @map("document_id")
+  jobType      String               @map("job_type") // parse_text, extract_requirements
+  status       DocumentProcessingStatus
+  errorMessage String?              @map("error_message") @db.Text
+  resultJson   Json?                @map("result_json")
+  retryCount   Int                  @default(0) @map("retry_count")
+  createdAt    DateTime             @default(now()) @map("created_at")
+  completedAt  DateTime?            @map("completed_at")
+
+  document SourceDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId, status])
+  @@map("document_processing_jobs")
+}
+
+model Attachment {
+  id           String   @id @default(uuid())
+  workItemId   String?  @map("work_item_id")
+  uploadedById String?  @map("uploaded_by_id")
+  fileName     String   @map("file_name")
+  fileType     String   @map("file_type")
+  fileSize     Int      @map("file_size")
+  storagePath  String   @map("storage_path")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  workItem   WorkItem? @relation(fields: [workItemId], references: [id], onDelete: SetNull)
+  uploadedBy User?     @relation(fields: [uploadedById], references: [id])
+
+  @@index([workItemId])
+  @@map("attachments")
+}
+
+// ============================================================
+// 11. LABELS
+// ============================================================
+
+model Label {
+  id        String @id @default(uuid())
+  projectId String @map("project_id")
+  name      String
+  color     String @default("#6B778C")
+
+  project   Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workItems WorkItemLabel[]
+
+  @@unique([projectId, name])
+  @@map("labels")
+}
+
+model WorkItemLabel {
+  workItemId String @map("work_item_id")
+  labelId    String @map("label_id")
+
+  workItem WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  label    Label    @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([workItemId, labelId])
+  @@map("work_item_labels")
+}
+
+// ============================================================
+// 12. DELIVERABLES
+// ============================================================
+
+model Deliverable {
+  id          String            @id @default(uuid())
+  projectId   String            @map("project_id")
+  name        String
+  description String?
+  owner       String?
+  status      DeliverableStatus @default(PLANNED)
+  artifactUrl String?           @map("artifact_url")
+  notes       String?           @db.Text
+  dueDate     DateTime?         @map("due_date")
+  deliveredAt DateTime?         @map("delivered_at")
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, status])
+  @@map("deliverables")
+}
+
+enum DeliverableStatus {
+  PLANNED
+  IN_PROGRESS
+  READY_FOR_REVIEW
+  DELIVERED
+  ACCEPTED
+  DEFERRED
+}
+
+// ============================================================
+// 13. COMMENTS & DECISIONS
+// ============================================================
+
+model Comment {
+  id          String   @id @default(uuid())
+  workItemId  String   @map("work_item_id")
+  authorId    String   @map("author_id")
+  parentId    String?  @map("parent_id")
+  body        String   @db.Text
+  mentions    Json?    // [userId, userId] for @mention tracking
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  workItem WorkItem  @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  author   User      @relation(fields: [authorId], references: [id])
+  parent   Comment?  @relation("CommentThread", fields: [parentId], references: [id])
+  replies  Comment[] @relation("CommentThread")
+
+  @@index([workItemId, createdAt])
+  @@map("comments")
+}
+
+model DecisionLog {
+  id              String         @id @default(uuid())
+  projectId       String         @map("project_id")
+  ownerId         String?        @map("owner_id")
+  title           String
+  summary         String         @db.Text
+  context         String?        @db.Text
+  status          DecisionStatus @default(PROPOSED)
+  relatedItemIds  Json?          @map("related_item_ids") // [workItemId, ...]
+  relatedDocIds   Json?          @map("related_doc_ids") // [documentId, ...]
+  decisionDate    DateTime?      @map("decision_date")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  owner   User?   @relation(fields: [ownerId], references: [id])
+
+  @@index([projectId, status])
+  @@map("decision_logs")
+}
+
+enum DecisionStatus {
+  PROPOSED
+  ACCEPTED
+  REJECTED
+  SUPERSEDED
+}
+
+// ============================================================
+// 14. WEEKLY REPORTS
+// ============================================================
+
+model WeeklyReport {
+  id          String       @id @default(uuid())
+  projectId   String       @map("project_id")
+  title       String       // e.g. "Week 3 Status Report"
+  content     Json         // structured report sections
+  sourceData  Json?        @map("source_data") // snapshot of data used
+  status      ReportStatus @default(DRAFT)
+  aiAssisted  Boolean      @default(false) @map("ai_assisted")
+  approvedAt  DateTime?    @map("approved_at")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+  @@map("weekly_reports")
+}
+
+enum ReportStatus {
+  DRAFT
+  APPROVED
+  SHARED
+  ARCHIVED
+}
+
+// ============================================================
+// 15. CUSTOM FIELDS (Extensibility)
+// ============================================================
+
+model CustomFieldDefinition {
+  id        String    @id @default(uuid())
+  projectId String    @map("project_id")
+  name      String
+  fieldType FieldType @map("field_type")
+  options   Json?
+  required  Boolean   @default(false)
+  sortOrder Int       @default(0) @map("sort_order")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  project Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  values  CustomFieldValue[]
+
+  @@unique([projectId, name])
+  @@map("custom_field_definitions")
+}
+
+enum FieldType {
+  TEXT
+  NUMBER
+  DATE
+  SELECT
+  MULTI_SELECT
+  URL
+  USER
+}
+
+model CustomFieldValue {
+  id         String @id @default(uuid())
+  workItemId String @map("work_item_id")
+  fieldDefId String @map("field_def_id")
+  value      String @db.Text
+
+  workItem WorkItem              @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  fieldDef CustomFieldDefinition @relation(fields: [fieldDefId], references: [id], onDelete: Cascade)
+
+  @@unique([workItemId, fieldDefId])
+  @@map("custom_field_values")
+}
+
+// ============================================================
+// 16. OUTBOX EVENTS (Reliable background processing)
+// ============================================================
+
+model OutboxEvent {
+  id          String       @id @default(uuid())
+  eventType   String       @map("event_type") // import, ai_generation, notification, report, document_parse
+  payload     Json
+  status      OutboxStatus @default(QUEUED)
+  retryCount  Int          @default(0) @map("retry_count")
+  maxRetries  Int          @default(3) @map("max_retries")
+  errorMessage String?     @map("error_message") @db.Text
+  scheduledAt DateTime?    @map("scheduled_at")
+  startedAt   DateTime?    @map("started_at")
+  completedAt DateTime?    @map("completed_at")
+  createdAt   DateTime     @default(now()) @map("created_at")
+
+  @@index([status, scheduledAt])
+  @@index([eventType, status])
+  @@map("outbox_events")
+}
+
+enum OutboxStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+  DEAD_LETTER
+}
+
+// ============================================================
+// 17. ACTIVITY LOG, AUDIT LOG, NOTIFICATIONS
+// ============================================================
+
+model ActivityLog {
+  id         String   @id @default(uuid())
+  projectId  String   @map("project_id")
+  userId     String?  @map("user_id")
+  workItemId String?  @map("work_item_id")
+  eventType  String   @map("event_type")
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user     User?     @relation(fields: [userId], references: [id])
+  workItem WorkItem? @relation(fields: [workItemId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
+  @@index([workItemId, createdAt])
+  @@map("activity_logs")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  orgId      String   @map("org_id")
+  userId     String?  @map("user_id")
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  action     String   // created, updated, deleted, approved, rejected, permission_changed
+  oldValue   Json?    @map("old_value")
+  newValue   Json?    @map("new_value")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  org      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user     User?        @relation(fields: [userId], references: [id])
+  workItem WorkItem?    @relation("AuditedWorkItem", fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, entityType, entityId])
+  @@index([orgId, createdAt])
+  @@map("audit_logs")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  projectId String?  @map("project_id")
+  type      String   // assigned, mentioned, blocked, ai_review, sprint_changed, bug_linked, due_approaching, report_ready
+  title     String
+  body      String?  @db.Text
+  read      Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read, createdAt])
+  @@map("notifications")
+}
+
+// ============================================================
+// 18. GIT INTEGRATION (Phase 3+ — schema only, no Phase 1 UI)
+// ============================================================
+
+model IntegrationConnection {
+  id           String   @id @default(uuid())
+  projectId    String   @map("project_id")
+  provider     String   // github, gitlab
+  accessToken  String?  @map("access_token") // encrypted or secret ref
+  webhookSecret String? @map("webhook_secret")
+  status       String   @default("active")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  repositories Repository[]
+
+  @@index([projectId])
+  @@map("integration_connections")
+}
+
+model Repository {
+  id              String   @id @default(uuid())
+  connectionId    String   @map("connection_id")
+  externalId      String   @map("external_id")
+  name            String
+  fullName        String   @map("full_name")
+  defaultBranch   String   @default("main") @map("default_branch")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  connection   IntegrationConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  pullRequests PullRequest[]
+  commits      Commit[]
+  deployments  DeploymentRecord[]
+
+  @@map("repositories")
+}
+
+model PullRequest {
+  id           String   @id @default(uuid())
+  repositoryId String   @map("repository_id")
+  externalId   String   @map("external_id")
+  title        String
+  status       String   // open, merged, closed
+  author       String?
+  sourceBranch String?  @map("source_branch")
+  targetBranch String?  @map("target_branch")
+  workItemKey  String?  @map("work_item_key") // extracted from branch name or title
+  createdAt    DateTime @default(now()) @map("created_at")
+  mergedAt     DateTime? @map("merged_at")
+
+  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@index([workItemKey])
+  @@map("pull_requests")
+}
+
+model Commit {
+  id           String   @id @default(uuid())
+  repositoryId String   @map("repository_id")
+  sha          String
+  message      String   @db.Text
+  author       String?
+  workItemKey  String?  @map("work_item_key") // extracted from commit message
+  committedAt  DateTime @map("committed_at")
+
+  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@index([workItemKey])
+  @@map("commits")
+}
+
+model DeploymentRecord {
+  id           String   @id @default(uuid())
+  repositoryId String   @map("repository_id")
+  environment  String   // staging, production
+  status       String   // success, failed, in_progress
+  version      String?
+  deployedAt   DateTime @map("deployed_at")
+
+  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@map("deployment_records")
+}
