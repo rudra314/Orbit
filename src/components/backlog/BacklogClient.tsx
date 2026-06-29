@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import type {
   BoardColumn,
   BoardItem,
@@ -16,6 +17,7 @@ import {
   WORK_ITEM_TYPES,
 } from "@/components/board/meta";
 import { WorkItemDetail } from "@/components/board/WorkItemDetail";
+import { GenerateModal } from "@/components/ai/GenerateModal";
 import { EpicSidebar, StatusBadge } from "./EpicSidebar";
 import { BacklogItemRow } from "./BacklogItemRow";
 import type {
@@ -72,9 +74,21 @@ function rollup(
 }
 
 export function BacklogClient({ data }: { data: BacklogData }) {
-  const { project, columns, members, sprints, currentUserId, canEdit, canDelete } =
-    data;
+  const {
+    project,
+    columns,
+    members,
+    sprints,
+    currentUserId,
+    canEdit,
+    canDelete,
+    canImport,
+    canUseAi,
+    aiEnabled,
+    aiModelLabel,
+  } = data;
 
+  const [showGenerate, setShowGenerate] = useState(false);
   const [items, setItems] = useState<BoardItem[]>(data.items);
   const [epics, setEpics] = useState<EpicWithStats[]>(data.epics);
   const [selectedEpicId, setSelectedEpicId] = useState<string | null>(null);
@@ -399,8 +413,26 @@ export function BacklogClient({ data }: { data: BacklogData }) {
             Needs planning
           </button>
 
+          {canImport && (
+            <Link
+              href={`/${project.key}/backlog/import`}
+              className="ml-auto rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+            >
+              ↑ Import
+            </Link>
+          )}
+
+          {canUseAi && (
+            <button
+              onClick={() => setShowGenerate(true)}
+              className={`${canImport ? "" : "ml-auto"} rounded-md border border-primary bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary`}
+            >
+              ✦ Generate stories
+            </button>
+          )}
+
           {canEdit && (
-            <div className="relative ml-auto">
+            <div className={`relative ${canUseAi ? "" : "ml-auto"}`}>
               <button
                 onClick={() => setCreateMenuOpen((v) => !v)}
                 className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
@@ -521,9 +553,25 @@ export function BacklogClient({ data }: { data: BacklogData }) {
           members={members}
           sprints={sprints}
           canEdit={canEdit}
+          currentUserId={currentUserId}
           onClose={() => setDetailId(null)}
           onPatch={(p) => handlePatch(detailItem.id, p)}
           onMove={(s) => handleMove(detailItem.id, s)}
+          onNavigate={(id) => setDetailId(id)}
+        />
+      )}
+
+      {showGenerate && (
+        <GenerateModal
+          projectId={project.id}
+          aiEnabled={aiEnabled}
+          modelLabel={aiModelLabel}
+          onClose={() => setShowGenerate(false)}
+          onApproved={() => {
+            // New items span epics/features with server-generated keys; a full
+            // reload is the simplest reliable way to show the updated backlog.
+            window.location.reload();
+          }}
         />
       )}
 

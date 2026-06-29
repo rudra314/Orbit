@@ -1,10 +1,11 @@
 import { prisma } from "./prisma";
 import type { Prisma, Priority, WorkItemType } from "@prisma/client";
 
-// Relations included for board cards and the detail panel.
+// Relations included for board cards and the detail panel. linksFrom is the
+// item's source-side links — the same set the detail panel renders and counts.
 const boardInclude = {
   assignee: { select: { id: true, name: true, avatarUrl: true } },
-  _count: { select: { linksFrom: true, linksTo: true } },
+  _count: { select: { linksFrom: true } },
 } satisfies Prisma.WorkItemInclude;
 
 export type BoardWorkItem = Prisma.WorkItemGetPayload<{
@@ -41,6 +42,7 @@ export const workItemRepository = {
     reporterId: string;
     epicId?: string | null;
     featureId?: string | null;
+    foundInStoryId?: string | null;
   }) {
     return prisma.$transaction(async (tx) => {
       // Atomic increment guarantees a unique sequential number per project.
@@ -80,6 +82,34 @@ export const workItemRepository = {
           },
         },
       });
+
+      // "Found while testing": link the new bug back to the source story.
+      if (input.foundInStoryId) {
+        await tx.workItemLink.create({
+          data: {
+            sourceItemId: item.id,
+            targetItemId: input.foundInStoryId,
+            linkType: "FOUND_IN",
+            createdById: input.actorUserId,
+          },
+        });
+        await tx.outboxEvent.create({
+          data: {
+            eventType: "link_created",
+            payload: {
+              sourceItemId: item.id,
+              targetItemId: input.foundInStoryId,
+              linkType: "FOUND_IN",
+              actorUserId: input.actorUserId,
+            },
+          },
+        });
+        // Re-read so the returned item's link count reflects the new link.
+        return tx.workItem.findUniqueOrThrow({
+          where: { id: item.id },
+          include: boardInclude,
+        });
+      }
 
       return item;
     });

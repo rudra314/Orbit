@@ -8,6 +8,7 @@ const NAV = [
   ["board", "Board"],
   ["backlog", "Backlog"],
   ["sprints", "Sprints"],
+  ["ai-review", "AI Review"],
   ["deliverables", "Deliverables"],
   ["documents", "Documents"],
   ["reports", "Reports"],

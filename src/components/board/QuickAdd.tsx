@@ -6,20 +6,24 @@ import { TYPE_META, TypeIcon, WORK_ITEM_TYPES } from "./meta";
 
 export function QuickAdd({
   members,
+  stories,
   onCreate,
   onCancel,
 }: {
   members: BoardMember[];
+  stories: { id: string; itemKey: string; title: string }[];
   onCreate: (input: {
     type: WorkItemType;
     title: string;
     assigneeId: string | null;
+    foundInStoryId?: string | null;
   }) => Promise<void>;
   onCancel: () => void;
 }) {
   const [type, setType] = useState<WorkItemType>("STORY");
   const [title, setTitle] = useState("");
   const [assigneeId, setAssigneeId] = useState<string>("");
+  const [foundInStoryId, setFoundInStoryId] = useState<string>("");
   const [busy, setBusy] = useState(false);
 
   async function submit() {
@@ -30,8 +34,10 @@ export function QuickAdd({
         type,
         title: title.trim(),
         assigneeId: assigneeId || null,
+        foundInStoryId: type === "BUG" ? foundInStoryId || null : null,
       });
       setTitle("");
+      setFoundInStoryId("");
       // keep the form open for rapid entry
     } finally {
       setBusy(false);
@@ -70,6 +76,22 @@ export function QuickAdd({
         placeholder="What needs doing?"
         className="w-full resize-none rounded border border-input bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-ring"
       />
+      {type === "BUG" && stories.length > 0 && (
+        <select
+          value={foundInStoryId}
+          onChange={(e) => setFoundInStoryId(e.target.value)}
+          title="Found while testing"
+          className="mt-2 w-full rounded border border-input bg-background px-1.5 py-1 text-xs text-foreground outline-none"
+        >
+          <option value="">Found while testing… (optional)</option>
+          {stories.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.itemKey} — {s.title}
+            </option>
+          ))}
+        </select>
+      )}
+
       <div className="mt-2 flex items-center gap-2">
         <select
           value={assigneeId}

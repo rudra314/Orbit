@@ -48,6 +48,7 @@ export async function createWorkItemHandler(request: Request) {
       assigneeId: body.assigneeId ?? null,
       epicId: body.epicId ?? null,
       featureId: body.featureId ?? null,
+      foundInStoryId: body.foundInStoryId ?? null,
     });
     return NextResponse.json({ item }, { status: 201 });
   } catch (err) {

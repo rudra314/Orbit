@@ -20,6 +20,66 @@ export type StatusCategory =
   | "COMPLETED"
   | "CANCELLED";
 
+export type LinkType =
+  | "RELATES_TO"
+  | "BLOCKS"
+  | "IS_BLOCKED_BY"
+  | "CAUSES"
+  | "IS_CAUSED_BY"
+  | "DUPLICATES"
+  | "IS_DUPLICATED_BY"
+  | "FOUND_IN"
+  | "TESTED_BY"
+  | "DEPENDS_ON";
+
+export type LinkedItem = {
+  id: string;
+  itemKey: string;
+  type: WorkItemType;
+  title: string;
+  statusName: string;
+  statusColor: string;
+  assignee: { id: string; name: string; avatarUrl: string | null } | null;
+};
+
+export type LinkDto = {
+  id: string;
+  linkType: LinkType;
+  item: LinkedItem;
+};
+
+export type LinkSearchResult = {
+  id: string;
+  itemKey: string;
+  type: WorkItemType;
+  title: string;
+};
+
+export type TestType = "MANUAL" | "AUTOMATED";
+export type TestCaseStatus = "DRAFT" | "ACTIVE" | "REJECTED" | "DEPRECATED";
+
+export type TestStep = {
+  stepNumber: number;
+  action: string;
+  expectedResult: string;
+};
+
+export type TestCaseDto = {
+  id: string;
+  title: string;
+  preconditions: string | null;
+  steps: TestStep[];
+  expectedResult: string | null;
+  testType: TestType;
+  priority: Priority;
+  status: TestCaseStatus;
+  aiGenerationId: string | null;
+  sortOrder: number;
+  createdByName: string | null;
+  createdAt: string;
+  approvedAt: string | null;
+};
+
 export type BoardColumn = {
   id: string;
   name: string;

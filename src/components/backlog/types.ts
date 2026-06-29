@@ -38,6 +38,10 @@ export type BacklogData = {
   currentUserId: string;
   canEdit: boolean;
   canDelete: boolean;
+  canImport: boolean;
+  aiEnabled: boolean;
+  canUseAi: boolean;
+  aiModelLabel: string;
 };
 
 export const ROLLUP_META: Record<RollupStatus, { label: string; color: string }> =

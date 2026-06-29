@@ -35,6 +35,7 @@ export function BoardClient({ data }: { data: BoardData }) {
     return active ? { ...DEFAULT_FILTERS, sprintId: active.id } : DEFAULT_FILTERS;
   });
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detailTab, setDetailTab] = useState<"details" | "links">("details");
   const [quickAddCol, setQuickAddCol] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +54,15 @@ export function BoardClient({ data }: { data: BoardData }) {
     [items, filters, currentUserId],
   );
 
+  // Stories available as the "Found while testing" source when adding a bug.
+  const stories = useMemo(
+    () =>
+      items
+        .filter((it) => it.type === "STORY" && !it.id.startsWith("temp-"))
+        .map((it) => ({ id: it.id, itemKey: it.itemKey, title: it.title })),
+    [items],
+  );
+
   const itemsByColumn = useMemo(() => {
     const map: Record<string, BoardItem[]> = {};
     for (const col of columns) map[col.id] = [];
@@ -64,6 +74,17 @@ export function BoardClient({ data }: { data: BoardData }) {
     ? (items.find((i) => i.id === selectedId) ?? null)
     : null;
   const activeItem = activeId ? items.find((i) => i.id === activeId) : null;
+
+  function openDetail(id: string, tab: "details" | "links" = "details") {
+    setDetailTab(tab);
+    setSelectedId(id);
+  }
+
+  function setLinkCount(itemId: string, count: number) {
+    setItems((prev) =>
+      prev.map((it) => (it.id === itemId ? { ...it, linkCount: count } : it)),
+    );
+  }
 
   // --- Mutations (optimistic) ------------------------------------------
 
@@ -109,7 +130,12 @@ export function BoardClient({ data }: { data: BoardData }) {
 
   async function handleCreate(
     statusId: string,
-    input: { type: WorkItemType; title: string; assigneeId: string | null },
+    input: {
+      type: WorkItemType;
+      title: string;
+      assigneeId: string | null;
+      foundInStoryId?: string | null;
+    },
   ) {
     const tempId = `temp-${Date.now()}`;
     const temp = buildTempItem(tempId, statusId, input, members);
@@ -124,6 +150,7 @@ export function BoardClient({ data }: { data: BoardData }) {
           type: input.type,
           title: input.title,
           assigneeId: input.assigneeId,
+          foundInStoryId: input.foundInStoryId ?? null,
         }),
       });
       if (!res.ok) throw new Error((await res.json()).error ?? "Create failed");
@@ -178,7 +205,9 @@ export function BoardClient({ data }: { data: BoardData }) {
               onCancelAdd={() => setQuickAddCol(null)}
               onCreate={(input) => handleCreate(col.id, input)}
               members={members}
-              onCardClick={(id) => setSelectedId(id)}
+              stories={stories}
+              onCardClick={(id) => openDetail(id, "details")}
+              onLinkClick={(id) => openDetail(id, "links")}
             />
           ))}
         </div>
@@ -196,9 +225,13 @@ export function BoardClient({ data }: { data: BoardData }) {
           members={members}
           sprints={sprints}
           canEdit={canEdit}
+          currentUserId={currentUserId}
+          initialTab={detailTab}
           onClose={() => setSelectedId(null)}
           onPatch={(patch) => handlePatch(selected.id, patch)}
           onMove={(statusId) => handleMove(selected.id, statusId)}
+          onNavigate={(id) => openDetail(id, "details")}
+          onLinkCountChange={setLinkCount}
         />
       )}
 
@@ -220,7 +253,9 @@ function Column({
   onCancelAdd,
   onCreate,
   members,
+  stories,
   onCardClick,
+  onLinkClick,
 }: {
   column: BoardColumn;
   items: BoardItem[];
@@ -232,9 +267,12 @@ function Column({
     type: WorkItemType;
     title: string;
     assigneeId: string | null;
+    foundInStoryId?: string | null;
   }) => Promise<void>;
   members: BoardMember[];
+  stories: { id: string; itemKey: string; title: string }[];
   onCardClick: (id: string) => void;
+  onLinkClick: (id: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
 
@@ -267,6 +305,7 @@ function Column({
         {canEdit && isQuickAdding && (
           <QuickAdd
             members={members}
+            stories={stories}
             onCreate={onCreate}
             onCancel={onCancelAdd}
           />
@@ -277,6 +316,7 @@ function Column({
             item={item}
             canEdit={canEdit}
             onClick={() => onCardClick(item.id)}
+            onLinkClick={() => onLinkClick(item.id)}
           />
         ))}
         {items.length === 0 && !isQuickAdding && (
@@ -293,10 +333,12 @@ function DraggableCard({
   item,
   canEdit,
   onClick,
+  onLinkClick,
 }: {
   item: BoardItem;
   canEdit: boolean;
   onClick: () => void;
+  onLinkClick: () => void;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: item.id,
@@ -310,7 +352,7 @@ function DraggableCard({
       {...listeners}
       style={{ opacity: isDragging ? 0.4 : 1 }}
     >
-      <WorkItemCard item={item} onClick={onClick} />
+      <WorkItemCard item={item} onClick={onClick} onLinkClick={onLinkClick} />
     </div>
   );
 }

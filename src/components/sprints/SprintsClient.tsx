@@ -35,7 +35,7 @@ function fmt(d: string | null) {
 }
 
 export function SprintsClient({ data }: { data: SprintsData }) {
-  const { project, columns, members, canEdit, canManage } = data;
+  const { project, columns, members, canEdit, canManage, currentUserId } = data;
 
   const [sprints, setSprints] = useState<SprintDTO[]>(data.sprints);
   const [items, setItems] = useState<BoardItem[]>(data.items);
@@ -400,9 +400,11 @@ export function SprintsClient({ data }: { data: SprintsData }) {
             status: s.status,
           }))}
           canEdit={canEdit}
+          currentUserId={currentUserId}
           onClose={() => setDetailId(null)}
           onPatch={(p) => patchItem(detailItem.id, p)}
           onMove={(s) => moveItem(detailItem.id, s)}
+          onNavigate={(id) => setDetailId(id)}
         />
       )}
 

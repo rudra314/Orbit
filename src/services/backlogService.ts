@@ -4,7 +4,9 @@ import { workflowRepository } from "@/repositories/workflowRepository";
 import { workItemRepository } from "@/repositories/workItemRepository";
 import { projectMemberRepository } from "@/repositories/projectMemberRepository";
 import { sprintRepository } from "@/repositories/sprintRepository";
+import { aiGenerationRepository } from "@/repositories/aiGenerationRepository";
 import { NotFoundError, toBoardItem, type BoardItem } from "@/services/boardService";
+import { ANTHROPIC_MODEL_LABEL } from "@/lib/llm/anthropicAdapter";
 import type { StatusCategory } from "@prisma/client";
 
 type DerivedStatus = "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED";
@@ -51,7 +53,10 @@ export const backlogService = {
       workflowRepository.listForProject(project.id),
     ]);
 
-    const member = await projectMemberRepository.find(project.id, userId);
+    const [member, aiConfig] = await Promise.all([
+      projectMemberRepository.find(project.id, userId),
+      aiGenerationRepository.getConfig(project.id),
+    ]);
     const categoryOf = new Map(columns.map((c) => [c.id, c.category]));
     const items = rawItems.map(toBoardItem);
 
@@ -101,6 +106,10 @@ export const backlogService = {
       currentUserId: userId,
       canEdit: member ? ["PM", "LEAD", "CONTRIBUTOR"].includes(member.role) : false,
       canDelete: member?.role === "PM",
+      canImport: member ? ["PM", "LEAD"].includes(member.role) : false,
+      aiEnabled: !!aiConfig && aiConfig.aiMode !== "DISABLED",
+      canUseAi: member ? ["PM", "LEAD"].includes(member.role) : false,
+      aiModelLabel: ANTHROPIC_MODEL_LABEL,
     };
   },
 };

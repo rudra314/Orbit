@@ -52,7 +52,7 @@ export function toBoardItem(it: BoardWorkItem) {
     taskCategory: it.taskCategory,
     dueDate: it.dueDate ? it.dueDate.toISOString() : null,
     createdAt: it.createdAt.toISOString(),
-    linkCount: it._count.linksFrom + it._count.linksTo,
+    linkCount: it._count.linksFrom,
   };
 }
 

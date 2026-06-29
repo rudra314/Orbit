@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { BoardColumn, BoardItem, BoardMember, BoardSprint } from "./types";
+import type {
+  BoardColumn,
+  BoardItem,
+  BoardMember,
+  BoardSprint,
+} from "./types";
 import {
   DISCIPLINES,
   PRIORITIES,
@@ -11,6 +16,8 @@ import {
   TypeIcon,
   VERIFICATION_STATUSES,
 } from "./meta";
+import { LinksTab } from "./LinksTab";
+import { TestCasesTab } from "./TestCasesTab";
 
 type Tab = "details" | "tests" | "links" | "activity";
 
@@ -20,20 +27,35 @@ export function WorkItemDetail({
   members,
   sprints,
   canEdit,
+  currentUserId,
+  initialTab = "details",
   onClose,
   onPatch,
   onMove,
+  onNavigate,
+  onLinkCountChange,
 }: {
   item: BoardItem;
   columns: BoardColumn[];
   members: BoardMember[];
   sprints: BoardSprint[];
   canEdit: boolean;
+  currentUserId: string;
+  initialTab?: Tab;
   onClose: () => void;
   onPatch: (patch: Record<string, unknown>) => void;
   onMove: (statusId: string) => void;
+  onNavigate?: (itemId: string) => void;
+  onLinkCountChange?: (itemId: string, count: number) => void;
 }) {
-  const [tab, setTab] = useState<Tab>("details");
+  const [tab, setTab] = useState<Tab>(initialTab);
+
+  // Permission gates derived from the current member's role/discipline. The
+  // server enforces these regardless; this just hides controls.
+  const me = members.find((m) => m.userId === currentUserId);
+  const canRemoveLinks = !!me && ["PM", "LEAD"].includes(me.role);
+  const canReviewTests =
+    !!me && (["PM", "LEAD"].includes(me.role) || me.discipline === "QE");
 
   return (
     <>
@@ -86,7 +108,7 @@ export function WorkItemDetail({
         </div>
 
         <div className="flex-1 overflow-y-auto p-4">
-          {tab === "details" ? (
+          {tab === "details" && (
             <DetailsTab
               item={item}
               columns={columns}
@@ -96,9 +118,24 @@ export function WorkItemDetail({
               onPatch={onPatch}
               onMove={onMove}
             />
-          ) : (
-            <Placeholder tab={tab} />
           )}
+          {tab === "links" && (
+            <LinksTab
+              item={item}
+              canEdit={canEdit}
+              canRemoveLinks={canRemoveLinks}
+              onNavigate={onNavigate}
+              onLinkCountChange={onLinkCountChange}
+            />
+          )}
+          {tab === "tests" && (
+            <TestCasesTab
+              item={item}
+              canEdit={canEdit}
+              canReviewTests={canReviewTests}
+            />
+          )}
+          {tab === "activity" && <Placeholder tab="activity" />}
         </div>
       </aside>
     </>

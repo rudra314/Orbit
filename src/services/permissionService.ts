@@ -49,11 +49,85 @@ export const permissionService = {
     return member;
   },
 
+  // AI generation and approval (generate/approve/reject) is PM or LEAD.
+  async assertCanUseAi(userId: string, projectId: string) {
+    const member = await projectMemberRepository.find(projectId, userId);
+    if (!member || !["PM", "LEAD"].includes(member.role)) {
+      throw new PermissionError(
+        "Only the PM or Lead can generate and approve AI output.",
+      );
+    }
+    return member;
+  },
+
+  // Removing a work item link is PM or LEAD (contributors may only create).
+  async assertCanManageLinks(userId: string, projectId: string) {
+    const member = await projectMemberRepository.find(projectId, userId);
+    if (!member || !["PM", "LEAD"].includes(member.role)) {
+      throw new PermissionError("Only the PM or Lead can remove links.");
+    }
+    return member;
+  },
+
+  // Approving/rejecting/deprecating a test case is PM, LEAD, or the QE discipline.
+  async assertCanReviewTestCase(userId: string, projectId: string) {
+    const member = await projectMemberRepository.find(projectId, userId);
+    const allowed =
+      member &&
+      (["PM", "LEAD"].includes(member.role) || member.discipline === "QE");
+    if (!allowed) {
+      throw new PermissionError(
+        "Only the PM, Lead, or a QE can review test cases.",
+      );
+    }
+    return member;
+  },
+
   // Delete operations are PM-only.
   async assertCanDelete(userId: string, projectId: string) {
     const member = await projectMemberRepository.find(projectId, userId);
     if (!member || member.role !== "PM") {
       throw new PermissionError("Only the project PM can delete items.");
+    }
+    return member;
+  },
+
+  // Importing a backlog from Excel/CSV is PM or LEAD only.
+  async assertCanImport(userId: string, projectId: string) {
+    const member = await projectMemberRepository.find(projectId, userId);
+    if (!member || !["PM", "LEAD"].includes(member.role)) {
+      throw new PermissionError("Only the PM or Lead can import items.");
+    }
+    return member;
+  },
+
+  // Creating/editing/deleting deliverables is PM only.
+  async assertCanManageDeliverables(userId: string, projectId: string) {
+    const member = await projectMemberRepository.find(projectId, userId);
+    if (!member || member.role !== "PM") {
+      throw new PermissionError("Only the project PM can manage deliverables.");
+    }
+    return member;
+  },
+
+  // Marking a deliverable as delivered is PM or LEAD.
+  async assertCanMarkDelivered(userId: string, projectId: string) {
+    const member = await projectMemberRepository.find(projectId, userId);
+    if (!member || !["PM", "LEAD"].includes(member.role)) {
+      throw new PermissionError(
+        "Only the PM or Lead can mark deliverables as delivered.",
+      );
+    }
+    return member;
+  },
+
+  // Generating, editing, approving, and archiving weekly reports is PM or LEAD.
+  async assertCanManageReports(userId: string, projectId: string) {
+    const member = await projectMemberRepository.find(projectId, userId);
+    if (!member || !["PM", "LEAD"].includes(member.role)) {
+      throw new PermissionError(
+        "Only the PM or Lead can generate and approve reports.",
+      );
     }
     return member;
   },

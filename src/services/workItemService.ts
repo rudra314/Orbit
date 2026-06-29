@@ -60,6 +60,7 @@ export const workItemService = {
     assigneeId?: string | null;
     epicId?: string | null;
     featureId?: string | null;
+    foundInStoryId?: string | null;
   }) {
     const project = await projectRepository.getByKeyForUser(
       input.projectKey,
@@ -72,6 +73,20 @@ export const workItemService = {
     if (!title) throw new ValidationError("Title is required.");
     if (!WORK_ITEM_TYPES.includes(input.type)) {
       throw new ValidationError("Invalid work item type.");
+    }
+
+    // "Found while testing" is only meaningful for bugs; the source must be a
+    // work item in this project.
+    let foundInStoryId: string | null = null;
+    if (input.foundInStoryId) {
+      if (input.type !== "BUG") {
+        throw new ValidationError("Only bugs can record a source story.");
+      }
+      const story = await workItemRepository.findProjectIdById(input.foundInStoryId);
+      if (!story || story.projectId !== project.id) {
+        throw new ValidationError("The source story is not in this project.");
+      }
+      foundInStoryId = input.foundInStoryId;
     }
 
     const columns = await workflowRepository.listForProject(project.id);
@@ -113,6 +128,7 @@ export const workItemService = {
       reporterId: input.actorUserId,
       epicId,
       featureId,
+      foundInStoryId,
     });
     return toBoardItem(item);
   },

@@ -43,6 +43,12 @@ export const projectRepository = {
     });
   },
 
+  getByIdForUser(id: string, userId: string) {
+    return prisma.project.findFirst({
+      where: { id, members: { some: { userId } } },
+    });
+  },
+
   existsByKeyInOrg(orgId: string, key: string) {
     return prisma.project.findFirst({ where: { orgId, key }, select: { id: true } });
   },

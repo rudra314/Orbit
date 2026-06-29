@@ -1,7 +1,10 @@
 import type {
   Discipline,
+  LinkType,
   Priority,
   Severity,
+  TestCaseStatus,
+  TestType,
   VerificationStatus,
   WorkItemType,
 } from "./types";
@@ -109,6 +112,50 @@ export const VERIFICATION_STATUSES: VerificationStatus[] = [
   "VERIFIED",
   "REOPENED",
 ];
+
+// Human-readable label per link type — used both for the "Add link" dropdown
+// and for the grouped section headers in the Links tab.
+export const LINK_TYPE_LABEL: Record<LinkType, string> = {
+  RELATES_TO: "Relates to",
+  BLOCKS: "Blocks",
+  IS_BLOCKED_BY: "Is blocked by",
+  CAUSES: "Causes",
+  IS_CAUSED_BY: "Is caused by",
+  DUPLICATES: "Duplicates",
+  IS_DUPLICATED_BY: "Is duplicated by",
+  FOUND_IN: "Found in",
+  TESTED_BY: "Tested by",
+  DEPENDS_ON: "Depends on",
+};
+
+// Order shown in the dropdown and used to group the link list.
+export const LINK_TYPE_ORDER: LinkType[] = [
+  "RELATES_TO",
+  "BLOCKS",
+  "IS_BLOCKED_BY",
+  "DEPENDS_ON",
+  "CAUSES",
+  "IS_CAUSED_BY",
+  "DUPLICATES",
+  "IS_DUPLICATED_BY",
+  "FOUND_IN",
+  "TESTED_BY",
+];
+
+export const TEST_STATUS_META: Record<
+  TestCaseStatus,
+  { label: string; color: string }
+> = {
+  DRAFT: { label: "Draft", color: "#6B778C" },
+  ACTIVE: { label: "Active", color: "#0F6E56" },
+  REJECTED: { label: "Rejected", color: "#DE350B" },
+  DEPRECATED: { label: "Deprecated", color: "#97650F" },
+};
+
+export const TEST_TYPE_LABEL: Record<TestType, string> = {
+  MANUAL: "Manual",
+  AUTOMATED: "Automated",
+};
 
 export function initials(name: string | null | undefined) {
   if (!name) return "?";

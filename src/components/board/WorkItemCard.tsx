@@ -8,10 +8,12 @@ import { Avatar, PriorityDot, TypeIcon } from "./meta";
 export function WorkItemCard({
   item,
   onClick,
+  onLinkClick,
   dragging = false,
 }: {
   item: BoardItem;
   onClick?: () => void;
+  onLinkClick?: () => void;
   dragging?: boolean;
 }) {
   return (
@@ -48,12 +50,16 @@ export function WorkItemCard({
           </span>
         )}
         {item.linkCount > 0 && (
-          <span
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onLinkClick?.();
+            }}
             title={`${item.linkCount} linked item${item.linkCount > 1 ? "s" : ""}`}
-            className="flex items-center gap-0.5 text-[11px] text-muted-foreground"
+            className="flex items-center gap-0.5 rounded px-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             🔗 {item.linkCount}
-          </span>
+          </button>
         )}
         <span className="ml-auto">
           {item.assignee ? (
