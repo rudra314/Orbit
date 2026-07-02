@@ -480,10 +480,52 @@ export function BacklogClient({ data }: { data: BacklogData }) {
         {/* List */}
         <div className="flex-1 overflow-y-auto">
           {items.length === 0 ? (
-            <EmptyState>
-              No items yet. Create your first story or generate from requirements
-              (coming soon).
-            </EmptyState>
+            createType ? (
+              <CreateItemRow
+                type={createType}
+                members={members}
+                onCancel={() => setCreateType(null)}
+                onCreate={(vals) =>
+                  handleCreateItem({ ...vals, type: createType, featureId: null })
+                }
+              />
+            ) : (
+              <EmptyState>
+                <p className="max-w-sm">
+                  No stories yet. Create your first story, import from Excel, or
+                  generate from requirements.
+                </p>
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                  {canEdit && (
+                    <button
+                      onClick={() => {
+                        setCreateType("STORY");
+                        setCreateFeatureId(null);
+                      }}
+                      className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
+                    >
+                      + Create story
+                    </button>
+                  )}
+                  {canImport && (
+                    <Link
+                      href={`/${project.key}/backlog/import`}
+                      className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+                    >
+                      ↑ Import from Excel
+                    </Link>
+                  )}
+                  {canUseAi && (
+                    <button
+                      onClick={() => setShowGenerate(true)}
+                      className="rounded-md border border-primary bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary"
+                    >
+                      ✦ Generate from requirements
+                    </button>
+                  )}
+                </div>
+              </EmptyState>
+            )
           ) : selectedEpic ? (
             <EpicView
               epic={selectedEpic}

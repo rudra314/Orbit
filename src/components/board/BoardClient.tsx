@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   DndContext,
@@ -206,24 +207,38 @@ export function BoardClient({ data }: { data: BoardData }) {
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
       >
-        <div className="flex flex-1 gap-3 overflow-x-auto p-4">
-          {columns.map((col) => (
-            <Column
-              key={col.id}
-              column={col}
-              items={itemsByColumn[col.id] ?? []}
-              canEdit={canEdit}
-              isQuickAdding={quickAddCol === col.id}
-              onAdd={() => setQuickAddCol(col.id)}
-              onCancelAdd={() => setQuickAddCol(null)}
-              onCreate={(input) => handleCreate(col.id, input)}
-              members={members}
-              stories={stories}
-              onCardClick={(id) => openDetail(id, "details")}
-              onLinkClick={(id) => openDetail(id, "links")}
-            />
-          ))}
-        </div>
+        {visibleItems.length === 0 ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+            <p className="max-w-sm text-sm text-muted-foreground">
+              No items in this sprint. Go to backlog to add stories to this sprint.
+            </p>
+            <Link
+              href={`/${project.key}/backlog`}
+              className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted"
+            >
+              Go to backlog
+            </Link>
+          </div>
+        ) : (
+          <div className="flex flex-1 gap-3 overflow-x-auto p-4">
+            {columns.map((col) => (
+              <Column
+                key={col.id}
+                column={col}
+                items={itemsByColumn[col.id] ?? []}
+                canEdit={canEdit}
+                isQuickAdding={quickAddCol === col.id}
+                onAdd={() => setQuickAddCol(col.id)}
+                onCancelAdd={() => setQuickAddCol(null)}
+                onCreate={(input) => handleCreate(col.id, input)}
+                members={members}
+                stories={stories}
+                onCardClick={(id) => openDetail(id, "details")}
+                onLinkClick={(id) => openDetail(id, "links")}
+              />
+            ))}
+          </div>
+        )}
 
         <DragOverlay>
           {activeItem ? <WorkItemCard item={activeItem} dragging /> : null}

@@ -90,6 +90,8 @@ export function DashboardClient({
 
   const health = HEALTH_META[data.health.level];
   const k = data.keyNumbers;
+  // A brand-new project with no work items has nothing to chart.
+  const totalItems = data.workByType.reduce((sum, t) => sum + t.count, 0);
 
   return (
     <div className="flex h-full flex-col overflow-auto bg-background">
@@ -123,6 +125,13 @@ export function DashboardClient({
         </div>
       </div>
 
+      {totalItems === 0 ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-16 text-center">
+          <p className="text-sm text-muted-foreground">
+            Set up your first sprint to see project health.
+          </p>
+        </div>
+      ) : (
       <div className="flex flex-col gap-5 px-6 py-5">
         {/* Row 1 — key numbers */}
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -318,6 +327,7 @@ export function DashboardClient({
           )}
         </Panel>
       </div>
+      )}
     </div>
   );
 }
