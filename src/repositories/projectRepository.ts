@@ -3,10 +3,24 @@ import type {
   AiApprovalRule,
   AiMode,
   Discipline,
+  EstimationMode,
   ProjectRole,
+  ProjectStatus,
   ProjectType,
 } from "@prisma/client";
 import type { WorkflowStatusInput } from "@/lib/workflowDefaults";
+
+// Fields editable from project settings (general tab + danger zone).
+export type ProjectUpdateData = {
+  name?: string;
+  description?: string | null;
+  type?: ProjectType;
+  accentColor?: string;
+  estimationMode?: EstimationMode;
+  startDate?: Date | null;
+  targetDate?: Date | null;
+  status?: ProjectStatus;
+};
 
 export type CreateProjectData = {
   orgId: string;
@@ -51,6 +65,23 @@ export const projectRepository = {
 
   existsByKeyInOrg(orgId: string, key: string) {
     return prisma.project.findFirst({ where: { orgId, key }, select: { id: true } });
+  },
+
+  // Minimal identity used by services that need the owning org / key for a
+  // project (audit writes, invitations).
+  meta(id: string) {
+    return prisma.project.findUnique({
+      where: { id },
+      select: { id: true, orgId: true, key: true, name: true },
+    });
+  },
+
+  update(id: string, data: ProjectUpdateData) {
+    return prisma.project.update({ where: { id }, data });
+  },
+
+  remove(id: string) {
+    return prisma.project.delete({ where: { id } });
   },
 
   // Creates the project and all of its initial relations in a single

@@ -1,5 +1,16 @@
 import { prisma } from "./prisma";
+import { logActivity } from "./activityRepository";
 import type { Prisma, Priority, WorkItemType } from "@prisma/client";
+
+// Item fields whose changes surface in the activity feed. Read before an update
+// so we can diff old → new. isBlocked and sprintId get their own event types.
+const TRACKED_FIELDS = [
+  "title",
+  "description",
+  "priority",
+  "assigneeId",
+  "storyPoints",
+] as const;
 
 // Relations included for board cards and the detail panel. linksFrom is the
 // item's source-side links — the same set the detail panel renders and counts.
@@ -21,11 +32,30 @@ export const workItemRepository = {
     });
   },
 
+  // Resolves a set of work item ids to their keys (for audit-log display, where
+  // entityId is a bare id with no relation).
+  keysByIds(ids: string[]) {
+    if (ids.length === 0) return Promise.resolve([]);
+    return prisma.workItem.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, itemKey: true },
+    });
+  },
+
   // Returns just enough to authorize a mutation against the item's project.
   findProjectIdById(id: string) {
     return prisma.workItem.findUnique({
       where: { id },
       select: { id: true, projectId: true, statusId: true },
+    });
+  },
+
+  // Project + assignee, used by the comment flow to authorize and to resolve
+  // notification recipients.
+  findCommentContext(id: string) {
+    return prisma.workItem.findUnique({
+      where: { id },
+      select: { id: true, projectId: true, assigneeId: true },
     });
   },
 
@@ -83,6 +113,14 @@ export const workItemRepository = {
         },
       });
 
+      await logActivity(tx, {
+        projectId: input.projectId,
+        userId: input.actorUserId,
+        workItemId: item.id,
+        eventType: "work_item_created",
+        metadata: { itemKey: item.itemKey, title: item.title, type: item.type },
+      });
+
       // "Found while testing": link the new bug back to the source story.
       if (input.foundInStoryId) {
         await tx.workItemLink.create({
@@ -102,6 +140,22 @@ export const workItemRepository = {
               linkType: "FOUND_IN",
               actorUserId: input.actorUserId,
             },
+          },
+        });
+        const target = await tx.workItem.findUnique({
+          where: { id: input.foundInStoryId },
+          select: { itemKey: true, title: true },
+        });
+        await logActivity(tx, {
+          projectId: input.projectId,
+          userId: input.actorUserId,
+          workItemId: item.id,
+          eventType: "link_created",
+          metadata: {
+            linkType: "FOUND_IN",
+            targetId: input.foundInStoryId,
+            targetKey: target?.itemKey ?? "",
+            targetTitle: target?.title ?? "",
           },
         });
         // Re-read so the returned item's link count reflects the new link.
@@ -140,6 +194,17 @@ export const workItemRepository = {
             toStatusId: input.toStatusId,
             actorUserId: input.actorUserId,
           },
+        },
+      });
+
+      await logActivity(tx, {
+        projectId: current.projectId,
+        userId: input.actorUserId,
+        workItemId: item.id,
+        eventType: "status_changed",
+        metadata: {
+          fromStatusId: current.statusId,
+          toStatusId: input.toStatusId,
         },
       });
 
@@ -230,6 +295,21 @@ export const workItemRepository = {
     data: Prisma.WorkItemUpdateInput;
   }) {
     return prisma.$transaction(async (tx) => {
+      // Snapshot the tracked fields before the write so we can diff old → new.
+      const before = await tx.workItem.findUniqueOrThrow({
+        where: { id: input.id },
+        select: {
+          title: true,
+          description: true,
+          priority: true,
+          assigneeId: true,
+          storyPoints: true,
+          isBlocked: true,
+          blockerReason: true,
+          sprintId: true,
+        },
+      });
+
       const item = await tx.workItem.update({
         where: { id: input.id },
         data: input.data,
@@ -247,6 +327,42 @@ export const workItemRepository = {
           },
         },
       });
+
+      // Field-level changes for the activity feed. Blocking and sprint moves get
+      // their own, more legible event types.
+      const changes: { field: string; from: string | number | null; to: string | number | null }[] = [];
+      for (const field of TRACKED_FIELDS) {
+        if (before[field] !== item[field]) {
+          changes.push({ field, from: before[field], to: item[field] });
+        }
+      }
+      if (changes.length > 0) {
+        await logActivity(tx, {
+          projectId: item.projectId,
+          userId: input.actorUserId,
+          workItemId: item.id,
+          eventType: "work_item_updated",
+          metadata: { changes },
+        });
+      }
+      if (before.isBlocked !== item.isBlocked) {
+        await logActivity(tx, {
+          projectId: item.projectId,
+          userId: input.actorUserId,
+          workItemId: item.id,
+          eventType: "blocked_toggled",
+          metadata: { blocked: item.isBlocked, reason: item.blockerReason },
+        });
+      }
+      if (before.sprintId !== item.sprintId) {
+        await logActivity(tx, {
+          projectId: item.projectId,
+          userId: input.actorUserId,
+          workItemId: item.id,
+          eventType: "sprint_assigned",
+          metadata: { sprintId: item.sprintId },
+        });
+      }
 
       return item;
     });

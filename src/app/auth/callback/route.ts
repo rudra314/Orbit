@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { authService } from "@/services/authService";
+import { teamService } from "@/services/teamService";
 
 // Magic-link callback. Supabase redirects here with a `code` (PKCE flow).
 // We exchange it for a session (stored in httpOnly cookies) and provision
@@ -15,7 +16,7 @@ export async function GET(request: Request) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error && data.user?.email) {
-      await authService.ensureUser({
+      const appUser = await authService.ensureUser({
         email: data.user.email,
         name:
           (data.user.user_metadata?.name as string | undefined) ??
@@ -24,6 +25,8 @@ export async function GET(request: Request) {
         avatarUrl:
           (data.user.user_metadata?.avatar_url as string | undefined) ?? null,
       });
+      // Auto-join any projects this email was invited to.
+      await teamService.acceptInvitationsForUser(appUser.id, data.user.email);
       return NextResponse.redirect(`${origin}${next}`);
     }
   }

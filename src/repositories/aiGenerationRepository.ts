@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { logActivity } from "./activityRepository";
 import type { AiGenerationStatus, Prisma, Priority } from "@prisma/client";
 
 // The normalized, validated tree the service hands to approveAndCreate.
@@ -228,6 +229,15 @@ export const aiGenerationRepository = {
             counts,
           },
         },
+      });
+
+      // Project-level event (no single work item) — shows in the project feed.
+      await logActivity(tx, {
+        projectId: input.projectId,
+        userId: input.actorUserId,
+        workItemId: null,
+        eventType: "ai_generation_approved",
+        metadata: { counts },
       });
 
       return counts;

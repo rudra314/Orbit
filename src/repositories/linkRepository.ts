@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { logActivity } from "./activityRepository";
 import type { LinkType, Prisma } from "@prisma/client";
 
 // Fields shown for the item on the far end of a link (row + status badge + avatar).
@@ -103,6 +104,31 @@ export const linkRepository = {
           },
         },
       });
+
+      const [source, target] = await Promise.all([
+        tx.workItem.findUnique({
+          where: { id: input.sourceItemId },
+          select: { projectId: true },
+        }),
+        tx.workItem.findUnique({
+          where: { id: input.targetItemId },
+          select: { itemKey: true, title: true },
+        }),
+      ]);
+      if (source) {
+        await logActivity(tx, {
+          projectId: source.projectId,
+          userId: input.actorUserId,
+          workItemId: input.sourceItemId,
+          eventType: "link_created",
+          metadata: {
+            linkType: input.linkType,
+            targetId: input.targetItemId,
+            targetKey: target?.itemKey ?? "",
+            targetTitle: target?.title ?? "",
+          },
+        });
+      }
     });
   },
 

@@ -14,4 +14,14 @@ export const orgRepository = {
   countMembership(userId: string, orgId: string) {
     return prisma.orgMember.count({ where: { userId, orgId } });
   },
+
+  // Idempotent org membership, used when accepting a project invitation so the
+  // invitee belongs to the org that owns the project.
+  ensureMember(orgId: string, userId: string) {
+    return prisma.orgMember.upsert({
+      where: { orgId_userId: { orgId, userId } },
+      create: { orgId, userId, role: "MEMBER" },
+      update: {},
+    });
+  },
 };

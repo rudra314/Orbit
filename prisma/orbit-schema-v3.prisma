@@ -375,7 +375,6 @@ model WorkItem {
   linksTo    WorkItemLink[]   @relation("LinkTarget")
   customFieldValues CustomFieldValue[]
   activities ActivityLog[]
-  audits     AuditLog[]       @relation("AuditedWorkItem")
   attachments Attachment[]
 
   @@unique([projectId, itemKey])
@@ -1031,6 +1030,8 @@ model AuditLog {
   orgId      String   @map("org_id")
   userId     String?  @map("user_id")
   entityType String   @map("entity_type")
+  // Polymorphic reference (WorkItem, ProjectMember, Project, AiGeneration, …).
+  // Deliberately NOT a foreign key — audit rows outlive and span many entities.
   entityId   String   @map("entity_id")
   action     String   // created, updated, deleted, approved, rejected, permission_changed
   oldValue   Json?    @map("old_value")
@@ -1039,7 +1040,6 @@ model AuditLog {
 
   org      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   user     User?        @relation(fields: [userId], references: [id])
-  workItem WorkItem?    @relation("AuditedWorkItem", fields: [entityId], references: [id], onDelete: Cascade)
 
   @@index([orgId, entityType, entityId])
   @@index([orgId, createdAt])

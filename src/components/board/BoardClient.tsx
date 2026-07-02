@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   DndContext,
   DragOverlay,
@@ -43,6 +44,18 @@ export function BoardClient({ data }: { data: BoardData }) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
+
+  // Deep link from the project Activity feed (?item=<id>) opens that item's panel.
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const itemId = searchParams.get("item");
+    if (itemId && data.items.some((i) => i.id === itemId)) {
+      setDetailTab("details");
+      setSelectedId(itemId);
+    }
+    // Run once on mount for the incoming deep link.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function flash(message: string) {
     setError(message);

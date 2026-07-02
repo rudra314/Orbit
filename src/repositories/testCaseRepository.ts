@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { logActivity } from "./activityRepository";
 import type { Prisma, Priority, TestType, TestCaseStatus } from "@prisma/client";
 
 export type TestStep = {
@@ -92,6 +93,20 @@ export const testCaseRepository = {
           },
         },
       });
+
+      const item = await tx.workItem.findUnique({
+        where: { id: input.workItemId },
+        select: { projectId: true },
+      });
+      if (item) {
+        await logActivity(tx, {
+          projectId: item.projectId,
+          userId: input.createdById,
+          workItemId: input.workItemId,
+          eventType: "test_case_added",
+          metadata: { title: input.title },
+        });
+      }
 
       return created;
     });

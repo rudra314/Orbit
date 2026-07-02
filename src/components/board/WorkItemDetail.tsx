@@ -18,6 +18,8 @@ import {
 } from "./meta";
 import { LinksTab } from "./LinksTab";
 import { TestCasesTab } from "./TestCasesTab";
+import { ActivityTab, buildContext } from "@/components/activity/ActivityTab";
+import { CommentsSection } from "@/components/comments/CommentsSection";
 
 type Tab = "details" | "tests" | "links" | "activity";
 
@@ -56,6 +58,8 @@ export function WorkItemDetail({
   const canRemoveLinks = !!me && ["PM", "LEAD"].includes(me.role);
   const canReviewTests =
     !!me && (["PM", "LEAD"].includes(me.role) || me.discipline === "QE");
+  const isPM = me?.role === "PM";
+  const activityCtx = buildContext(columns, members, sprints);
 
   return (
     <>
@@ -135,21 +139,21 @@ export function WorkItemDetail({
               canReviewTests={canReviewTests}
             />
           )}
-          {tab === "activity" && <Placeholder tab="activity" />}
+          {tab === "activity" && (
+            <ActivityTab itemId={item.id} ctx={activityCtx} />
+          )}
+
+          {/* Comments — always visible, below whichever tab is active. */}
+          <CommentsSection
+            itemId={item.id}
+            members={members}
+            currentUserId={currentUserId}
+            canComment={canEdit}
+            isPM={isPM}
+          />
         </div>
       </aside>
     </>
-  );
-}
-
-function Placeholder({ tab }: { tab: Tab }) {
-  const label =
-    tab === "tests" ? "Test cases" : tab === "links" ? "Linked items" : "Activity";
-  return (
-    <div className="flex h-full flex-col items-center justify-center text-center text-sm text-muted-foreground">
-      <p>{label} aren&apos;t wired up yet.</p>
-      <p className="text-xs">Coming in a future session.</p>
-    </div>
   );
 }
 

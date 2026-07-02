@@ -12,8 +12,34 @@ export class PermissionError extends Error {
 // Roles allowed to edit/move/create work items. VIEWER and GUEST are read-only.
 const EDITOR_ROLES: ProjectRole[] = ["PM", "LEAD", "CONTRIBUTOR"];
 
+// Role hierarchy (higher number = more authority). Used by assertProjectRole.
+const ROLE_RANK: Record<ProjectRole, number> = {
+  PM: 4,
+  LEAD: 3,
+  CONTRIBUTOR: 2,
+  VIEWER: 1,
+  GUEST: 0,
+};
+
 // Central permission checks. Every service mutation should route through here.
 export const permissionService = {
+  // Generic floor check: throws 403 unless the user's role in the project is at
+  // least `minimumRole`. The catch-all guard for any mutation — call it at the
+  // top of a service method when no more specific assertion fits.
+  async assertProjectRole(
+    userId: string,
+    projectId: string,
+    minimumRole: ProjectRole,
+  ) {
+    const member = await projectMemberRepository.find(projectId, userId);
+    if (!member || ROLE_RANK[member.role] < ROLE_RANK[minimumRole]) {
+      throw new PermissionError(
+        `This action requires the ${minimumRole} role or higher.`,
+      );
+    }
+    return member;
+  },
+
   // Any member of an org may create a project in it (pilot policy).
   async assertCanCreateProject(userId: string, orgId: string) {
     const count = await orgRepository.countMembership(userId, orgId);

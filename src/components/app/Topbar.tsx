@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 function titleFromPath(pathname: string) {
   const last = pathname.split("/").filter(Boolean).pop() ?? "";
@@ -24,14 +25,7 @@ export function Topbar({ user }: { user: { name: string; email: string } }) {
       </h1>
 
       <div className="flex items-center gap-3">
-        <button
-          type="button"
-          aria-label="Notifications"
-          title="Notifications"
-          className="flex h-9 w-9 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted"
-        >
-          🔔
-        </button>
+        <NotificationBell />
 
         <ThemeToggle />
 
