@@ -3,13 +3,23 @@ import { createClient } from "@/lib/supabase/server";
 import { authService } from "@/services/authService";
 import { teamService } from "@/services/teamService";
 
+const DEFAULT_REDIRECT = "/";
+
+// Allowlist: only same-origin relative paths. Rejects absolute/protocol-relative
+// URLs and the `${origin}${next}` userinfo bypass (e.g. next="@evil.com" turns
+// into "http://host@evil.com", whose hostname is evil.com).
+export function isInternalPath(path: string): boolean {
+  return path.startsWith("/") && !path.startsWith("//") && !path.includes("://");
+}
+
 // Magic-link callback. Supabase redirects here with a `code` (PKCE flow).
 // We exchange it for a session (stored in httpOnly cookies) and provision
 // the Orbit User row on first login.
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/";
+  const rawNext = searchParams.get("next") ?? DEFAULT_REDIRECT;
+  const next = isInternalPath(rawNext) ? rawNext : DEFAULT_REDIRECT;
 
   if (code) {
     const supabase = await createClient();

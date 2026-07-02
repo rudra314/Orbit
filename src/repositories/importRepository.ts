@@ -243,6 +243,6 @@ export const importRepository = {
       });
 
       return { created, updated };
-    });
+    }, { timeout: 30_000 });
   },
 };

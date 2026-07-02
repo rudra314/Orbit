@@ -27,6 +27,14 @@ async function featureEpicInProject(featureId: string, projectId: string) {
   return feature.epicId;
 }
 
+// Verifies a sprint belongs to the project; returns nothing or throws.
+export async function assertSprintInProject(sprintId: string, projectId: string) {
+  const sprint = await sprintRepository.findProjectId(sprintId);
+  if (!sprint || sprint.projectId !== projectId) {
+    throw new ValidationError("Sprint does not belong to this project.");
+  }
+}
+
 const WORK_ITEM_TYPES: WorkItemType[] = ["STORY", "BUG", "TASK", "SPIKE"];
 
 // Fields the detail panel may edit, with how to coerce each.
@@ -203,9 +211,12 @@ export const workItemService = {
 
     if ("sprintId" in patch) {
       const sprintId = patch.sprintId as string | null;
-      data.sprint = sprintId
-        ? { connect: { id: sprintId } }
-        : { disconnect: true };
+      if (sprintId) {
+        await assertSprintInProject(sprintId, existing.projectId);
+        data.sprint = { connect: { id: sprintId } };
+      } else {
+        data.sprint = { disconnect: true };
+      }
     }
 
     if ("epicId" in patch) {

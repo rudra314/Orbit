@@ -25,6 +25,9 @@ const ICONS: Record<string, string> = {
   bug_linked: "🔗",
   due_approaching: "📅",
   status_done: "✅",
+  pulse_reminder: "📋",
+  blocker_flagged: "⚠️",
+  dm_responded: "💬",
 };
 
 export function notificationIcon(type: string): string {

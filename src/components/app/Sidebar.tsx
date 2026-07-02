@@ -13,18 +13,28 @@ const NAV = [
   ["deliverables", "Deliverables", "📦"],
   ["documents", "Documents", "📄"],
   ["reports", "Reports", "📊"],
+  ["pulse/digest", "Team Digest", "👥"],
   ["dashboard", "Dashboard", "📈"],
   ["activity", "Activity", "🕒"],
+  ["pulse", "Daily Pulse", "📋"],
   ["audit", "Audit", "🛡"],
   ["settings", "Settings", "⚙"],
 ] as const;
 
+const PULSE_DOT_COLOR: Record<"submitted" | "pending" | "overdue", string | null> = {
+  submitted: "#00875A",
+  overdue: "#FF8B00",
+  pending: null,
+};
+
 export function Sidebar({
   projects,
   currentKey,
+  pulseStatus,
 }: {
   projects: { key: string; name: string; accentColor: string }[];
   currentKey: string;
+  pulseStatus?: "submitted" | "pending" | "overdue";
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -73,10 +83,24 @@ export function Sidebar({
                   : "text-sidebar-muted hover:bg-sidebar-active hover:text-sidebar-foreground"
               }`}
             >
-              <span className="text-base leading-none xl:hidden" aria-hidden>
+              <span className="relative text-base leading-none xl:hidden" aria-hidden>
                 {icon}
+                {slug === "pulse" && pulseStatus && PULSE_DOT_COLOR[pulseStatus] && (
+                  <span
+                    className="absolute -right-1 -top-1 h-2 w-2 rounded-full"
+                    style={{ backgroundColor: PULSE_DOT_COLOR[pulseStatus]! }}
+                  />
+                )}
               </span>
-              <span className="hidden xl:inline">{label}</span>
+              <span className="hidden items-center gap-1.5 xl:flex">
+                {label}
+                {slug === "pulse" && pulseStatus && PULSE_DOT_COLOR[pulseStatus] && (
+                  <span
+                    className="h-2 w-2 rounded-full"
+                    style={{ backgroundColor: PULSE_DOT_COLOR[pulseStatus]! }}
+                  />
+                )}
+              </span>
             </Link>
           );
         })}

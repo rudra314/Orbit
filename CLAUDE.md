@@ -6,12 +6,30 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 AI Native Delivery Management Platform for Innominds project teams. Replaces Excel-based project tracking with structured backlog, sprint execution, QA traceability, and AI-assisted story/test/report generation. First deployment is an internal pilot on an Innominds VM for one project team. See `Orbit-Product-Context.md` for full product positioning, segments, and explicit non-goals (no billing, no timesheets, no mobile-native, no client portal in Phase 1).
 
 ## Current state (read first)
-This repo is **pre-implementation**. The only committed artifacts are:
-- `prisma/orbit-schema-v3.prisma` — the complete 41-model data model (the source of truth for the domain)
-- `Orbit-Product-Context.md` — product strategy
-- `CLAUDE.md` — this file
+This repo is **implemented and feature-complete for Phase 1** (Next.js 16 App Router + TypeScript + Prisma 6 + Supabase auth — real code, not a scaffold). Sessions 1 through 12A are committed (see `git log`). Working-tree-only, not yet committed as of this writing: a Daily Pulse (async standup) feature — `src/services/pulseService.ts`, `src/api/v1/pulse.ts`, related routes/UI/migration — see `documentation/flows.md` §6 and `documentation/automation.md`.
+Next: Session 12B — Docker, deploy, demo prep.
 
-There is **no application code, `package.json`, build pipeline, or test tooling yet**. The architecture and patterns below are the agreed design to build *toward* — follow them when scaffolding. Do not claim build/lint/test commands work until the corresponding tooling actually exists; add the real commands to this file as they land.
+**Read `documentation/` before making non-trivial changes.** It is the reverse-engineered source of truth for how the system actually behaves today (produced by a shipping/security review, not aspirational):
+- `documentation/architecture.md` — system overview, stack, auth flow, trust boundaries, known risks
+- `documentation/flows.md` — permission-relevant journeys with the authz check and side effects at each step
+- `documentation/permissions.md` — role model and the resource × operation × role matrix
+- `documentation/variables.md` — every env var, its risk, and rotation notes
+- `documentation/automation.md` — the AI generation/approval governance surface (highest-risk area)
+- `documentation/cron.md` — background workers and the (currently missing) scheduler
+- `documentation/emails.md` — the invite-email path
+- `documentation/tests.md` — test-coverage map
+
+These docs record several **documented-vs-implemented gaps** in this file's own "target design" sections below — check the doc before assuming schema-described behavior is actually live: `ProjectAiConfig.approvalRule`/`.secretRef`/`.tokenBudget`/`.costBudget` are schema fields not read by any code; `OrgRole` is not enforced anywhere (all real authorization is `ProjectRole`); only the Anthropic LLM provider is wired despite the stack section below describing three; there is no real cron/scheduler, only a client-poll-triggered outbox drain (`documentation/cron.md`); there is no automated test suite yet.
+
+## Guardrails for AI coding agents
+
+- **Never bypass `permissionService`.** Every service mutation must call an `assertCan*`/`assertProjectRole` check before writing. See `documentation/permissions.md` for the full inventory — extend it, don't route around it with inline role-string checks.
+- **Never call `prisma.*` outside `src/repositories/` or `src/workers/`.** `src/app/**` and `src/services/**` must stay Prisma-free (verified clean today by `documentation/architecture.md`) — if you find yourself importing Prisma in a service or component, stop and add a repository method instead.
+- **Every state-changing mutation writes its `OutboxEvent` inside the same `prisma.$transaction` as the row change it describes.** Not fire-and-forget, not a follow-up call. See `documentation/flows.md` for worked examples.
+- **AI-generated content stays `DRAFT` until a human approval call.** Do not add a path that creates real `Epic`/`Feature`/`WorkItem`/`TestCase` rows directly from an LLM response — route through `aiService.approveGeneration` (or extend it).
+- **Trust boundary: `/api/v1/**` is not covered by middleware.** Every handler in `src/api/v1/*.ts` must call `getAuthedUser()` itself and 401 on `null` before doing anything else — don't assume the middleware protects it.
+- **Don't widen the client-exposed env surface.** Only add a `NEXT_PUBLIC_` var if it's genuinely safe to ship to the browser; see `documentation/variables.md` for what's there today and why.
+- **The `documentation/*.md` files describe current-state, not aspiration.** If you change code in a way that makes one of them wrong (a new role check, a new background job, a new env var, a new AI capability), update the relevant doc in the same change — don't let it drift out of sync again.
 
 ## Intended architecture
 4-layer separation — never violate this once code exists:
@@ -41,27 +59,29 @@ There is **no application code, `package.json`, build pipeline, or test tooling 
 - **Other:** `SourceDocument` (+ versions, processing jobs) feed AI; `Deliverable`, `DecisionLog`, `WeeklyReport`, `Label`, `CustomFieldDefinition`/`CustomFieldValue`, and the Git-integration models (`IntegrationConnection`/`Repository`/`PullRequest`/`Commit`/`DeploymentRecord`) are Phase 3+ schema with no Phase 1 UI.
 - All tables use `@@map` snake_case names and most fields use `@map` — Prisma model names are camelCase, DB names are snake_case.
 
-## Intended tech stack
-- Next.js 15 App Router + TypeScript + Tailwind CSS
-- PostgreSQL with Prisma ORM (`provider = "postgresql"`, `url = env("DATABASE_URL")`)
+## Tech stack (actual)
+- Next.js 16 App Router + TypeScript + Tailwind CSS v4, React 19
+- PostgreSQL with Prisma ORM 6 (`provider = "postgresql"`, `url = env("DATABASE_URL")`, migrations via `DIRECT_URL`)
 - dnd-kit for board drag-and-drop
-- LLM: provider abstraction in `src/lib/llm/` supporting Anthropic (Claude API), Ollama, and OpenAI-compatible endpoints, selected per project via `ProjectAiConfig.aiMode`/`provider`
-- Auth: magic links now (`User.provider = magic_link`), M365 integration planned (`provider_user_id` holds the M365 oid)
+- LLM: `src/lib/llm/` currently wires **only Anthropic** (`@anthropic-ai/sdk`, model `claude-sonnet-4-6`) via a global `ANTHROPIC_API_KEY`/`LLM_PROVIDER` env pair. The schema's per-project `ProjectAiConfig.provider`/`.secretRef` fields exist but are not read — see `documentation/automation.md` and `documentation/variables.md` before assuming Ollama/OpenAI-compatible or per-project keys work.
+- Auth: Supabase magic-link only (`@supabase/ssr`), no passwords. `User.provider = magic_link`; M365 integration (`provider_user_id` holding the M365 oid) is schema-ready but not implemented. See `documentation/architecture.md`.
 
-## Common service patterns (target design)
-- Create work item: `workItemService.create()` → atomically increments `nextItemNumber` and generates key → creates item → writes `OutboxEvent`
-- Move a card: `boardService.moveCard()` → updates `statusId` → emits `status_changed` event
-- AI generation: `aiService.generate()` → checks `ProjectAiConfig` (mode/provider/budget) → calls LLM provider → stores result in `AiGeneration` as `DRAFT`
-- Approve AI output: `aiService.approve()` → creates real entities → links them via `AiGeneratedEntity` → emits events. Who may approve is governed by `ProjectAiConfig.approvalRule` (`PM_APPROVAL | PM_OR_LEAD_APPROVAL | ANY_REVIEWER`).
+## Common service patterns (as implemented)
+- Create work item: `workItemService.create()` → `permissionService.assertCanMutateBoard` → atomically increments `nextItemNumber` and generates key → creates item → writes `OutboxEvent`, all in one `prisma.$transaction`
+- Move a card: `boardService.moveCard()` → `assertCanMutateBoard` → updates `statusId` → emits `status_changed` event, same transaction
+- AI generation: `aiService.generateBacklog()` → `assertCanUseAi` → checks `ProjectAiConfig.aiMode` only (**not** provider/budget — those fields aren't read yet) → calls the Anthropic adapter → stores result in `AiGeneration` as `DRAFT`
+- Approve AI output: `aiService.approveGeneration()` → `assertCanUseAi` (re-checked) → creates real entities in one transaction → links them via `AiGeneratedEntity` → emits events. **Approval is hardcoded to PM/LEAD** — `ProjectAiConfig.approvalRule` (`PM_APPROVAL | PM_OR_LEAD_APPROVAL | ANY_REVIEWER`) is defined in the schema but not consulted. See `documentation/automation.md`.
 
 ## Database commands
-The schema is at the **non-default** path `prisma/orbit-schema-v3.prisma`, so pass `--schema` explicitly (or move/rename to `prisma/schema.prisma` and configure the Prisma `schema` path in `package.json` once scaffolding exists):
-- Generate client: `npx prisma generate --schema prisma/orbit-schema-v3.prisma`
-- Create/apply migration: `npx prisma migrate dev --schema prisma/orbit-schema-v3.prisma`
-- A seed script does not exist yet; `npx prisma db seed` will only work once `prisma.seed` is configured.
+The schema is at the **non-default** path `prisma/orbit-schema-v3.prisma`. `package.json` scripts already wire `--schema` and load `.env.local` via `dotenv-cli`:
+- `npm run db:generate` — `prisma generate`
+- `npm run db:migrate` — `prisma migrate dev`
+- `npm run db:seed` — `prisma db seed` (seed script: `prisma/seed.ts`, configured via `"prisma": {"seed": ...}` in `package.json`)
+- `npm run db:studio` — `prisma studio`
+- App commands: `npm run dev` / `npm run build` / `npm run start` / `npm run lint`. **No test command exists** — no test framework is installed and no test files exist (`documentation/tests.md`).
 
 ## Roles
-Project roles: `PM` (full control) > `LEAD` (manage sprints, estimate) > `CONTRIBUTOR` (edit assigned work, update status) > `VIEWER` (read-only) > `GUEST`. Delete operations are PM only. AI approval follows the project's `approvalRule`. Org-level roles are separate: `OWNER | ADMIN | MEMBER`.
+Project roles: `PM` (full control) > `LEAD` (manage sprints, estimate) > `CONTRIBUTOR` (edit assigned work, update status) > `VIEWER` (read-only) > `GUEST`. Delete operations are PM only. AI approval is currently hardcoded to PM/LEAD regardless of the project's `approvalRule` (see above). Org-level roles (`OWNER | ADMIN | MEMBER`) exist in the schema but are **not enforced by any code path** — see `documentation/permissions.md`.
 
 
 

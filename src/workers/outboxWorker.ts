@@ -4,6 +4,7 @@ import {
   buildNotifications,
   NOTIFICATION_EVENT_TYPES,
 } from "@/workers/notificationWorker";
+import { maybeQueuePulseReminders } from "@/workers/pulseReminderScheduler";
 
 const BATCH_SIZE = 50;
 
@@ -18,6 +19,12 @@ export async function drainOutbox(): Promise<{ processed: number }> {
   if (draining) return { processed: 0 };
   draining = true;
   try {
+    try {
+      await maybeQueuePulseReminders();
+    } catch (err) {
+      console.error("pulse reminder scheduling failed:", err);
+    }
+
     const events = await outboxRepository.claimBatch(
       [...NOTIFICATION_EVENT_TYPES],
       BATCH_SIZE,

@@ -157,4 +157,42 @@ export const permissionService = {
     }
     return member;
   },
+
+  // Submitting a daily pulse is CONTRIBUTOR and above. VIEWER/GUEST are read-only.
+  async assertCanSubmitPulse(userId: string, projectId: string) {
+    const member = await projectMemberRepository.find(projectId, userId);
+    if (!member || !EDITOR_ROLES.includes(member.role)) {
+      throw new PermissionError("Only contributors and above can submit a pulse.");
+    }
+    return member;
+  },
+
+  // Replying to a flagged blocker is PM or LEAD.
+  async assertCanRespondToPulseBlocker(userId: string, projectId: string) {
+    const member = await projectMemberRepository.find(projectId, userId);
+    if (!member || !["PM", "LEAD"].includes(member.role)) {
+      throw new PermissionError("Only the PM or Lead can respond to blockers.");
+    }
+    return member;
+  },
+
+  // Regenerating the AI digest summary and sending reminders is PM only.
+  async assertCanManagePulseDigest(userId: string, projectId: string) {
+    const member = await projectMemberRepository.find(projectId, userId);
+    if (!member || member.role !== "PM") {
+      throw new PermissionError(
+        "Only the project PM can regenerate the summary or send reminders.",
+      );
+    }
+    return member;
+  },
+
+  // Exporting the digest for a sprint call is PM or LEAD.
+  async assertCanExportPulseDigest(userId: string, projectId: string) {
+    const member = await projectMemberRepository.find(projectId, userId);
+    if (!member || !["PM", "LEAD"].includes(member.role)) {
+      throw new PermissionError("Only the PM or Lead can export the digest.");
+    }
+    return member;
+  },
 };

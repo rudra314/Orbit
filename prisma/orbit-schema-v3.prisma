@@ -67,6 +67,7 @@ model User {
   uploadedDocuments  SourceDocument[] @relation("UploadedBy")
   decisionOwner      DecisionLog[]
   uploadedFiles      Attachment[]
+  dailyPulses        DailyPulse[]
 
   @@map("users")
 }
@@ -157,6 +158,8 @@ model Project {
   testRuns         TestRun[]
   weeklyReports    WeeklyReport[]
   integrations     IntegrationConnection[]
+  dailyPulses      DailyPulse[]
+  teamDigests      TeamDigest[]
 
   @@unique([orgId, key])
   @@index([orgId, status])
@@ -376,6 +379,7 @@ model WorkItem {
   customFieldValues CustomFieldValue[]
   activities ActivityLog[]
   attachments Attachment[]
+  pulseItems DailyPulseItem[]
 
   @@unique([projectId, itemKey])
   @@index([projectId, statusId])
@@ -1146,4 +1150,62 @@ model DeploymentRecord {
   repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
 
   @@map("deployment_records")
+}
+
+// ============================================================
+// 19. DAILY PULSE (async standup)
+// ============================================================
+
+model DailyPulse {
+  id              String   @id @default(uuid())
+  projectId       String   @map("project_id")
+  userId          String   @map("user_id")
+  date            DateTime @db.Date
+  generalNote     String?  @db.Text @map("general_note")
+  submittedAt     DateTime @default(now()) @map("submitted_at")
+
+  project Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User           @relation(fields: [userId], references: [id])
+  items   DailyPulseItem[]
+
+  @@unique([projectId, userId, date])
+  @@index([projectId, date])
+  @@map("daily_pulses")
+}
+
+model DailyPulseItem {
+  id            String  @id @default(uuid())
+  pulseId       String  @map("pulse_id")
+  workItemId    String  @map("work_item_id")
+  progressNote  String  @db.Text @map("progress_note")
+  isBlocker     Boolean @default(false) @map("is_blocker")
+  blockerDetail String? @db.Text @map("blocker_detail")
+  dmResponse    String? @db.Text @map("dm_response")
+  dmRespondedAt DateTime? @map("dm_responded_at")
+  hoursLogged   Float?  @map("hours_logged")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  pulse    DailyPulse @relation(fields: [pulseId], references: [id], onDelete: Cascade)
+  workItem WorkItem   @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+
+  @@index([pulseId])
+  @@index([workItemId])
+  @@map("daily_pulse_items")
+}
+
+model TeamDigest {
+  id              String   @id @default(uuid())
+  projectId       String   @map("project_id")
+  date            DateTime @db.Date
+  aiSummary       String?  @db.Text @map("ai_summary")
+  blockerCount    Int      @default(0) @map("blocker_count")
+  submissionCount Int      @default(0) @map("submission_count")
+  totalMembers    Int      @map("total_members")
+  generatedAt     DateTime @default(now()) @map("generated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, date])
+  @@index([projectId, date])
+  @@map("team_digests")
 }

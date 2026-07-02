@@ -1,4 +1,5 @@
 import { prisma } from "@/repositories/prisma";
+import { pulseRepository } from "@/repositories/pulseRepository";
 import type { NewNotification } from "@/repositories/notificationRepository";
 
 // Outbox event types this worker turns into notifications.
@@ -10,6 +11,9 @@ export const NOTIFICATION_EVENT_TYPES = [
   "ai_generation_approved",
   "sprint_started",
   "sprint_completed",
+  "blocker_flagged",
+  "dm_responded",
+  "pulse_reminder_check",
 ] as const;
 
 type Payload = Record<string, unknown>;
@@ -266,6 +270,80 @@ async function onSprintCompleted(p: Payload): Promise<NewNotification[]> {
     }));
 }
 
+async function onBlockerFlagged(p: Payload): Promise<NewNotification[]> {
+  const projectId = str(p.projectId);
+  const workItemId = str(p.workItemId);
+  const actorUserId = str(p.actorUserId);
+  const blockerDetail = str(p.blockerDetail) ?? "";
+  if (!projectId || !workItemId) return [];
+
+  const [key, name, item, pms] = await Promise.all([
+    projectKey(projectId),
+    actorName(actorUserId),
+    prisma.workItem.findUnique({ where: { id: workItemId }, select: { itemKey: true } }),
+    prisma.projectMember.findMany({
+      where: { projectId, role: "PM" },
+      select: { userId: true },
+    }),
+  ]);
+  if (!key || !item) return [];
+
+  return pms
+    .map((m) => m.userId)
+    .filter((userId) => userId !== actorUserId)
+    .map((userId) => ({
+      userId,
+      projectId,
+      type: "blocker_flagged",
+      title: `${name} flagged a blocker on ${item.itemKey}`,
+      body: blockerDetail.slice(0, 100),
+      link: `/${key}/pulse/digest`,
+    }));
+}
+
+async function onDmResponded(p: Payload): Promise<NewNotification[]> {
+  const projectId = str(p.projectId);
+  const recipientUserId = str(p.recipientUserId);
+  const actorUserId = str(p.actorUserId);
+  const response = str(p.response) ?? "";
+  if (!projectId || !recipientUserId || recipientUserId === actorUserId) return [];
+
+  const [key, name] = await Promise.all([projectKey(projectId), actorName(actorUserId)]);
+  if (!key) return [];
+
+  return [
+    {
+      userId: recipientUserId,
+      projectId,
+      type: "dm_responded",
+      title: `${name} responded to your blocker`,
+      body: response.slice(0, 100),
+      link: `/${key}/pulse`,
+    },
+  ];
+}
+
+async function onPulseReminderCheck(p: Payload): Promise<NewNotification[]> {
+  const projectId = str(p.projectId);
+  if (!projectId) return [];
+
+  const key = await projectKey(projectId);
+  if (!key) return [];
+
+  const now = new Date();
+  const date = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  const unsubmitted = await pulseRepository.getUnsubmittedMembers(projectId, date);
+
+  return unsubmitted.map((m) => ({
+    userId: m.userId,
+    projectId,
+    type: "pulse_reminder",
+    title: "Daily pulse reminder",
+    body: "Submit your daily pulse for today — takes under 2 minutes.",
+    link: `/${key}/pulse`,
+  }));
+}
+
 const HANDLERS: Record<string, (p: Payload) => Promise<NewNotification[]>> = {
   comment_added: onComment,
   status_changed: onStatusChanged,
@@ -274,6 +352,9 @@ const HANDLERS: Record<string, (p: Payload) => Promise<NewNotification[]>> = {
   ai_generation_approved: onAiApproved,
   sprint_started: onSprintStarted,
   sprint_completed: onSprintCompleted,
+  blocker_flagged: onBlockerFlagged,
+  dm_responded: onDmResponded,
+  pulse_reminder_check: onPulseReminderCheck,
 };
 
 // Maps one outbox event to the notification rows it produces. Returns [] for
