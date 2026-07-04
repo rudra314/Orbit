@@ -107,6 +107,7 @@ export const backlogService = {
       canEdit: member ? ["PM", "LEAD", "CONTRIBUTOR"].includes(member.role) : false,
       canDelete: member?.role === "PM",
       canImport: member ? ["PM", "LEAD"].includes(member.role) : false,
+      canManageEpics: member ? ["PM", "LEAD"].includes(member.role) : false,
       aiEnabled: !!aiConfig && aiConfig.aiMode !== "DISABLED",
       canUseAi: member ? ["PM", "LEAD"].includes(member.role) : false,
       aiModelLabel: ANTHROPIC_MODEL_LABEL,

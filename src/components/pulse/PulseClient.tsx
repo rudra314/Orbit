@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { TypeIcon } from "@/components/board/meta";
 import type { WorkItemType } from "@prisma/client";
 import type { pulseService } from "@/services/pulseService";
@@ -76,6 +77,7 @@ export function PulseClient({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const router = useRouter();
 
   const canSubmit = useMemo(() => rows.some((r) => r.progressNote.trim()), [rows]);
 
@@ -123,7 +125,11 @@ export function PulseClient({
       const res = await fetch(`/api/v1/projects/${data.project.id}/pulse`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items, generalNote: generalNote.trim() || null }),
+        body: JSON.stringify({
+          items,
+          generalNote: generalNote.trim() || null,
+          date: data.date,
+        }),
       });
       if (!res.ok) throw new Error((await res.json()).error ?? "Could not submit.");
       const { pulse } = (await res.json()) as { pulse: PulseData["pulse"] };
@@ -145,17 +151,46 @@ export function PulseClient({
 
   return (
     <div className="mx-auto flex h-full max-w-3xl flex-col overflow-y-auto px-6 py-6">
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-foreground">Daily Pulse</h1>
-        <p className="text-sm text-muted-foreground">
-          {data.dateLabel}
-          {data.sprintName && ` · ${data.sprintName}, Day ${data.sprintDay}`}
-        </p>
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-foreground">Daily Pulse</h1>
+          <p className="text-sm text-muted-foreground">
+            {data.dateLabel}
+            {data.sprintName && ` · ${data.sprintName}, Day ${data.sprintDay}`}
+          </p>
+        </div>
+        <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+          Filing for
+          <input
+            type="date"
+            value={data.date}
+            min={data.yesterdayDate}
+            max={data.todayDate}
+            onChange={(e) =>
+              router.push(`/${data.project.key}/pulse?date=${e.target.value}`)
+            }
+            className="rounded-md border border-input bg-background px-2 py-1 text-sm text-foreground outline-none focus:border-ring"
+          />
+        </label>
       </div>
 
       {error && (
         <div className="mb-4 rounded-md border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
           {error}
+        </div>
+      )}
+
+      {data.canSubmitForYesterday && (
+        <div className="mb-4 flex items-center justify-between rounded-md border border-warning/40 bg-warning/10 px-4 py-3">
+          <span className="text-sm text-foreground">
+            Looks like you missed yesterday&apos;s pulse.
+          </span>
+          <Link
+            href={`/${data.project.key}/pulse?date=${data.yesterdayDate}`}
+            className="text-sm font-medium text-primary hover:underline"
+          >
+            Submit for yesterday
+          </Link>
         </div>
       )}
 

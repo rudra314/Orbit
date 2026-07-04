@@ -106,15 +106,14 @@ export function GenerateModal({
               ? "Review generated backlog"
               : "Generate backlog from requirements"}
           </h2>
-          {dismissable && (
-            <button
-              onClick={onClose}
-              className="rounded p-1 text-muted-foreground hover:bg-muted"
-              aria-label="Close"
-            >
-              ✕
-            </button>
-          )}
+          <button
+            onClick={onClose}
+            disabled={!dismissable}
+            className="rounded p-1 text-muted-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
+            aria-label="Close"
+          >
+            ✕
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-4">
@@ -149,10 +148,10 @@ export function GenerateModal({
             <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
               <Spinner />
               <p className="text-sm font-medium text-foreground">
-                Generating stories and test cases…
+                Claude is analysing your requirements…
               </p>
               <p className="text-xs text-muted-foreground">
-                Usually takes 15–30 seconds
+                Usually 20-30 seconds
               </p>
             </div>
           )}

@@ -39,6 +39,7 @@ export type BacklogData = {
   canEdit: boolean;
   canDelete: boolean;
   canImport: boolean;
+  canManageEpics: boolean;
   aiEnabled: boolean;
   canUseAi: boolean;
   aiModelLabel: string;

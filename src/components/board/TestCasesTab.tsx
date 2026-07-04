@@ -40,6 +40,9 @@ export function TestCasesTab({
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [pending, setPending] = useState<
+    Record<string, "approve" | "reject" | "deprecate" | undefined>
+  >({});
 
   useEffect(() => {
     if (isTemp) return;
@@ -90,17 +93,24 @@ export function TestCasesTab({
 
   async function transition(id: string, action: "approve" | "reject" | "deprecate") {
     setError(null);
-    const res = await fetch(`/api/v1/test-cases/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action }),
-    });
-    const d = await res.json();
-    if (!res.ok) {
-      setError(d.error ?? "Could not update the test case.");
-      return;
+    // Immediate feedback on click — the button shows "Approving…" etc. right
+    // away instead of waiting for the round trip to complete.
+    setPending((prev) => ({ ...prev, [id]: action }));
+    try {
+      const res = await fetch(`/api/v1/test-cases/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const d = await res.json();
+      if (!res.ok) {
+        setError(d.error ?? "Could not update the test case.");
+        return;
+      }
+      setTestCases(d.testCases);
+    } finally {
+      setPending((prev) => ({ ...prev, [id]: undefined }));
     }
-    setTestCases(d.testCases);
   }
 
   async function generate() {
@@ -214,6 +224,7 @@ export function TestCasesTab({
               expanded={expandedId === tc.id}
               canEdit={canEdit}
               canReview={canReviewTests}
+              pendingAction={pending[tc.id]}
               onToggle={() =>
                 setExpandedId((cur) => (cur === tc.id ? null : tc.id))
               }
@@ -246,6 +257,7 @@ function TestCaseCard({
   expanded,
   canEdit,
   canReview,
+  pendingAction,
   onToggle,
   onEdit,
   onTransition,
@@ -254,6 +266,7 @@ function TestCaseCard({
   expanded: boolean;
   canEdit: boolean;
   canReview: boolean;
+  pendingAction?: "approve" | "reject" | "deprecate";
   onToggle: () => void;
   onEdit: () => void;
   onTransition: (action: "approve" | "reject" | "deprecate") => void;
@@ -346,24 +359,27 @@ function TestCaseCard({
               <>
                 <button
                   onClick={() => onTransition("approve")}
-                  className="rounded-md bg-success px-3 py-1 text-xs font-medium text-white"
+                  disabled={!!pendingAction}
+                  className="rounded-md bg-success px-3 py-1 text-xs font-medium text-white disabled:opacity-60"
                 >
-                  Approve
+                  {pendingAction === "approve" ? "Approving…" : "Approve"}
                 </button>
                 <button
                   onClick={() => onTransition("reject")}
-                  className="rounded-md border border-border px-3 py-1 text-xs text-danger hover:bg-muted"
+                  disabled={!!pendingAction}
+                  className="rounded-md border border-border px-3 py-1 text-xs text-danger hover:bg-muted disabled:opacity-60"
                 >
-                  Reject
+                  {pendingAction === "reject" ? "Rejecting…" : "Reject"}
                 </button>
               </>
             )}
             {canReview && tc.status === "ACTIVE" && (
               <button
                 onClick={() => onTransition("deprecate")}
-                className="rounded-md border border-border px-3 py-1 text-xs text-foreground hover:bg-muted"
+                disabled={!!pendingAction}
+                className="rounded-md border border-border px-3 py-1 text-xs text-foreground hover:bg-muted disabled:opacity-60"
               >
-                Deprecate
+                {pendingAction === "deprecate" ? "Deprecating…" : "Deprecate"}
               </button>
             )}
             {canEdit && (

@@ -35,6 +35,16 @@ function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+// Pulses may only be filed for today or yesterday (up to 24h back) — never
+// further in the past or ever in the future.
+function assertAllowedPulseDate(date: Date, now: Date) {
+  const today = dateOnly(null, now);
+  const yesterday = new Date(today.getTime() - DAY_MS);
+  if (date.getTime() !== today.getTime() && date.getTime() !== yesterday.getTime()) {
+    throw new ValidationError("You can only submit a pulse for today or yesterday.");
+  }
+}
+
 function friendlyDate(d: Date): string {
   return new Date(d).toLocaleDateString("en-US", {
     weekday: "long",
@@ -171,11 +181,14 @@ async function generateAiSummary(input: Parameters<typeof buildAiPrompt>[0]) {
 
 // --- core (projectId-based; used by API routes and the page wrappers below) --
 
-async function buildPulseForm(projectId: string, userId: string) {
+async function buildPulseForm(projectId: string, userId: string, dateStr?: string) {
   await permissionService.assertProjectMember(userId, projectId);
 
   const now = new Date();
-  const date = dateOnly(null, now);
+  const date = dateOnly(dateStr, now);
+  assertAllowedPulseDate(date, now);
+  const isToday = date.getTime() === dateOnly(null, now).getTime();
+
   const [pulse, ctx] = await Promise.all([
     pulseRepository.getTodayPulse(projectId, userId, date),
     sprintContext(projectId, now),
@@ -187,18 +200,33 @@ async function buildPulseForm(projectId: string, userId: string) {
     toActiveItemDto,
   );
 
+  // Offer "Submit for yesterday" only from today's form, once today is
+  // already submitted, and only if yesterday doesn't have one yet.
+  let canSubmitForYesterday = false;
+  const yesterday = new Date(date.getTime() - DAY_MS);
+  if (isToday && pulse) {
+    const yesterdayPulse = await pulseRepository.getTodayPulse(projectId, userId, yesterday);
+    canSubmitForYesterday = !yesterdayPulse;
+  }
+
   return {
+    date: isoDate(date),
     dateLabel: friendlyDate(date),
+    isToday,
     ...ctx,
     alreadySubmitted: !!pulse,
     pulse: pulse ? toPulseDto(pulse) : null,
     activeItems,
+    canSubmitForYesterday,
+    yesterdayDate: isoDate(yesterday),
+    todayDate: isoDate(dateOnly(null, now)),
   };
 }
 
 async function submitPulseCore(input: {
   actorUserId: string;
   projectId: string;
+  date?: unknown;
   generalNote?: unknown;
   items: {
     workItemId: unknown;
@@ -239,7 +267,8 @@ async function submitPulseCore(input: {
   }
 
   const now = new Date();
-  const date = dateOnly(null, now);
+  const date = dateOnly(typeof input.date === "string" ? input.date : null, now);
+  assertAllowedPulseDate(date, now);
   const existing = await pulseRepository.getTodayPulse(input.projectId, input.actorUserId, date);
   const previousBlockerWorkItemIds = existing
     ? existing.items.filter((i) => i.isBlocker).map((i) => i.workItemId)
@@ -421,6 +450,7 @@ export const pulseService = {
   submitPulse(input: {
     actorUserId: string;
     projectId: string;
+    date?: unknown;
     generalNote?: unknown;
     items: {
       workItemId: unknown;
@@ -527,10 +557,10 @@ export const pulseService = {
 
   // --- page wrappers (projectKey-based; used by the Server Component pages) --
 
-  async getPulsePageData(projectKey: string, userId: string) {
+  async getPulsePageData(projectKey: string, userId: string, dateStr?: string) {
     const project = await projectRepository.getByKeyForUser(projectKey, userId);
     if (!project) throw new NotFoundError("Project not found.");
-    const form = await buildPulseForm(project.id, userId);
+    const form = await buildPulseForm(project.id, userId, dateStr);
     return { project: { id: project.id, key: project.key, name: project.name }, ...form };
   },
 

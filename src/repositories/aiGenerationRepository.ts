@@ -124,6 +124,25 @@ export const aiGenerationRepository = {
       const links: { entityType: string; entityId: string }[] = [];
       const counts = { epics: 0, features: 0, stories: 0, testCases: 0 };
 
+      // Reserve every story's item-key number in one round trip (mirrors the
+      // import batch's approach) instead of one atomic increment per story —
+      // a full-size generation can have 60+ stories.
+      const storyCount = input.epics.reduce(
+        (n, e) => n + e.features.reduce((m, f) => m + f.stories.length, 0),
+        0,
+      );
+      let projectKey = "";
+      let nextNumber = 0;
+      if (storyCount > 0) {
+        const project = await tx.project.update({
+          where: { id: input.projectId },
+          data: { nextItemNumber: { increment: storyCount } },
+          select: { key: true, nextItemNumber: true },
+        });
+        projectKey = project.key;
+        nextNumber = project.nextItemNumber - storyCount;
+      }
+
       for (const epic of input.epics) {
         const createdEpic = await tx.epic.create({
           data: {
@@ -150,12 +169,8 @@ export const aiGenerationRepository = {
           counts.features++;
 
           for (const story of feature.stories) {
-            const project = await tx.project.update({
-              where: { id: input.projectId },
-              data: { nextItemNumber: { increment: 1 } },
-              select: { key: true, nextItemNumber: true },
-            });
-            const itemKey = `${project.key}-${project.nextItemNumber - 1}`;
+            const itemKey = `${projectKey}-${nextNumber}`;
+            nextNumber++;
 
             const createdItem = await tx.workItem.create({
               data: {
@@ -241,6 +256,6 @@ export const aiGenerationRepository = {
       });
 
       return counts;
-    });
+    }, { timeout: 60_000 });
   },
 };

@@ -45,6 +45,7 @@ export type LinkedItem = {
 export type LinkDto = {
   id: string;
   linkType: LinkType;
+  direction: "out" | "in";
   item: LinkedItem;
 };
 

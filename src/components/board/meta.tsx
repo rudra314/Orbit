@@ -128,6 +128,15 @@ export const LINK_TYPE_LABEL: Record<LinkType, string> = {
   DEPENDS_ON: "Depends on",
 };
 
+// Label shown when viewing a one-directional link from the target's side
+// (e.g. a story shows the bug that was "found in" it as "Found here",
+// rather than the misleading "Found in" it'd read from the source's label).
+export const LINK_TYPE_REVERSE_LABEL: Partial<Record<LinkType, string>> = {
+  FOUND_IN: "Found here",
+  TESTED_BY: "Tests this",
+  DEPENDS_ON: "Depended on by",
+};
+
 // Order shown in the dropdown and used to group the link list.
 export const LINK_TYPE_ORDER: LinkType[] = [
   "RELATES_TO",

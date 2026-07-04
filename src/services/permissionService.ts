@@ -75,6 +75,16 @@ export const permissionService = {
     return member;
   },
 
+  // Creating an epic is PM or LEAD (feature/story creation stays open to
+  // contributors via assertCanMutateBoard).
+  async assertCanManageEpics(userId: string, projectId: string) {
+    const member = await projectMemberRepository.find(projectId, userId);
+    if (!member || !["PM", "LEAD"].includes(member.role)) {
+      throw new PermissionError("Only the PM or Lead can create epics.");
+    }
+    return member;
+  },
+
   // AI generation and approval (generate/approve/reject) is PM or LEAD.
   async assertCanUseAi(userId: string, projectId: string) {
     const member = await projectMemberRepository.find(projectId, userId);

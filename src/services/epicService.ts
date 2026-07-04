@@ -26,18 +26,29 @@ export function toEpicDTO(e: Epic): EpicDTO {
 }
 
 export const epicService = {
-  async create(input: { actorUserId: string; projectKey: string; title: string }) {
+  async create(input: {
+    actorUserId: string;
+    projectKey: string;
+    title: string;
+    description?: string | null;
+    targetDate?: string | null;
+  }) {
     const project = await projectRepository.getByKeyForUser(
       input.projectKey,
       input.actorUserId,
     );
     if (!project) throw new NotFoundError("Project not found.");
-    await permissionService.assertCanMutateBoard(input.actorUserId, project.id);
+    await permissionService.assertCanManageEpics(input.actorUserId, project.id);
 
     const title = input.title?.trim();
     if (!title) throw new ValidationError("Epic name is required.");
 
-    const epic = await epicRepository.create({ projectId: project.id, title });
+    const epic = await epicRepository.create({
+      projectId: project.id,
+      title,
+      description: input.description?.trim() || null,
+      targetDate: input.targetDate ? new Date(input.targetDate) : null,
+    });
     return toEpicDTO(epic);
   },
 

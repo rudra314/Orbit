@@ -29,6 +29,8 @@ export async function createEpicHandler(request: Request) {
       actorUserId: user.id,
       projectKey: body.projectKey,
       title: body.title,
+      description: body.description ?? null,
+      targetDate: body.targetDate ?? null,
     });
     return NextResponse.json({ epic }, { status: 201 });
   } catch (err) {

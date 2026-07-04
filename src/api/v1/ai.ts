@@ -5,7 +5,7 @@ import { NotFoundError } from "@/services/boardService";
 import { ValidationError } from "@/services/projectService";
 import { PermissionError } from "@/services/permissionService";
 import { LLMConfigError, LLMError } from "@/lib/llm/errors";
-import type { AiGenerationStatus } from "@prisma/client";
+import { Prisma, type AiGenerationStatus } from "@prisma/client";
 
 type Ctx = { params: Promise<{ projectId: string }> };
 
@@ -21,6 +21,15 @@ function errorResponse(err: unknown) {
   }
   if (err instanceof AiGenerationError || err instanceof LLMError) {
     return NextResponse.json({ error: err.message }, { status: 502 });
+  }
+  if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2028") {
+    return NextResponse.json(
+      {
+        error:
+          "Saving took too long and timed out. Try approving a smaller selection, or try again.",
+      },
+      { status: 504 },
+    );
   }
   console.error("ai request failed:", err);
   return NextResponse.json({ error: "Something went wrong." }, { status: 500 });

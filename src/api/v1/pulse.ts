@@ -23,13 +23,14 @@ async function requireUser() {
   return getAuthedUser();
 }
 
-// GET /api/v1/projects/[projectId]/pulse/today
-export async function getPulseTodayHandler(_request: Request, ctx: ProjectCtx) {
+// GET /api/v1/projects/[projectId]/pulse/today?date=
+export async function getPulseTodayHandler(request: Request, ctx: ProjectCtx) {
   const user = await requireUser();
   if (!user) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
   const { projectId } = await ctx.params;
+  const date = new URL(request.url).searchParams.get("date") ?? undefined;
   try {
-    const data = await pulseService.getOrBuildPulseForm(projectId, user.id);
+    const data = await pulseService.getOrBuildPulseForm(projectId, user.id, date);
     return NextResponse.json(data);
   } catch (err) {
     return errorResponse(err);
@@ -61,6 +62,7 @@ export async function submitPulseHandler(request: Request, ctx: ProjectCtx) {
     const pulse = await pulseService.submitPulse({
       actorUserId: user.id,
       projectId,
+      date: body.date,
       generalNote: body.generalNote ?? null,
       items: Array.isArray(body.items) ? body.items : [],
     });

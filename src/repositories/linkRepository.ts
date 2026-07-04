@@ -12,23 +12,41 @@ const linkedItemSelect = {
   assignee: { select: { id: true, name: true, avatarUrl: true } },
 } satisfies Prisma.WorkItemSelect;
 
-const withTarget = {
+const withSourceAndTarget = {
+  sourceItem: { select: linkedItemSelect },
   targetItem: { select: linkedItemSelect },
 } satisfies Prisma.WorkItemLinkInclude;
 
-export type WorkItemLinkRow = Prisma.WorkItemLinkGetPayload<{
-  include: typeof withTarget;
-}>;
+// Types that don't get a materialized reverse row (see linkService's REVERSE
+// map) — the target side has to be queried separately to see its side of it.
+const ONE_DIRECTIONAL_TYPES: LinkType[] = ["FOUND_IN", "TESTED_BY", "DEPENDS_ON"];
+
+export type WorkItemLinkRowWithDirection = Prisma.WorkItemLinkGetPayload<{
+  include: typeof withSourceAndTarget;
+}> & { direction: "out" | "in" };
 
 export const linkRepository = {
-  // Source-side links for an item (each item displays its own outgoing
-  // relationships; reverse rows are stored so the other item sees its side).
-  listForItem(itemId: string) {
-    return prisma.workItemLink.findMany({
-      where: { sourceItemId: itemId },
-      include: withTarget,
-      orderBy: { createdAt: "asc" },
-    });
+  // Every link touching an item: its own outgoing relationships (reverse rows
+  // are stored so the other item sees its side for two-way types), plus the
+  // incoming side of one-directional types (e.g. a story sees the bug that
+  // was "found in" it, even though only the bug->story row is stored).
+  async listForItem(itemId: string): Promise<WorkItemLinkRowWithDirection[]> {
+    const [outgoing, incoming] = await Promise.all([
+      prisma.workItemLink.findMany({
+        where: { sourceItemId: itemId },
+        include: withSourceAndTarget,
+        orderBy: { createdAt: "asc" },
+      }),
+      prisma.workItemLink.findMany({
+        where: { targetItemId: itemId, linkType: { in: ONE_DIRECTIONAL_TYPES } },
+        include: withSourceAndTarget,
+        orderBy: { createdAt: "asc" },
+      }),
+    ]);
+    return [
+      ...outgoing.map((r) => ({ ...r, direction: "out" as const })),
+      ...incoming.map((r) => ({ ...r, direction: "in" as const })),
+    ];
   },
 
   // Number of source-side links — matches what the detail panel renders and

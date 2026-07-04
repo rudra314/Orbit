@@ -24,15 +24,15 @@ export function EpicSidebar({
   epics,
   selectedEpicId,
   onSelect,
-  canEdit,
+  canManageEpics,
   onCreateEpic,
   totalItems,
 }: {
   epics: EpicWithStats[];
   selectedEpicId: string | null;
   onSelect: (id: string | null) => void;
-  canEdit: boolean;
-  onCreateEpic: (title: string) => Promise<void>;
+  canManageEpics: boolean;
+  onCreateEpic: (title: string) => Promise<boolean>;
   totalItems: number;
 }) {
   const [creating, setCreating] = useState(false);
@@ -43,9 +43,11 @@ export function EpicSidebar({
     if (!title.trim() || busy) return;
     setBusy(true);
     try {
-      await onCreateEpic(title.trim());
-      setTitle("");
-      setCreating(false);
+      const ok = await onCreateEpic(title.trim());
+      if (ok) {
+        setTitle("");
+        setCreating(false);
+      }
     } finally {
       setBusy(false);
     }
@@ -110,7 +112,7 @@ export function EpicSidebar({
         )}
       </div>
 
-      {canEdit && (
+      {canManageEpics && (
         <div className="border-t border-border p-2">
           {creating ? (
             <input

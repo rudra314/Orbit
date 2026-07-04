@@ -83,12 +83,14 @@ export function BacklogClient({ data }: { data: BacklogData }) {
     canEdit,
     canDelete,
     canImport,
+    canManageEpics,
     canUseAi,
     aiEnabled,
     aiModelLabel,
   } = data;
 
   const [showGenerate, setShowGenerate] = useState(false);
+  const [showCreateEpic, setShowCreateEpic] = useState(false);
   const [items, setItems] = useState<BoardItem[]>(data.items);
   const [epics, setEpics] = useState<EpicWithStats[]>(data.epics);
   const [selectedEpicId, setSelectedEpicId] = useState<string | null>(null);
@@ -258,12 +260,22 @@ export function BacklogClient({ data }: { data: BacklogData }) {
     }
   }
 
-  async function handleCreateEpic(title: string) {
+  // Returns true on success so callers (the sidebar quick-create and the
+  // toolbar modal) can decide whether to close/reset their own form.
+  async function handleCreateEpic(
+    title: string,
+    extra?: { description?: string | null; targetDate?: string | null },
+  ): Promise<boolean> {
     try {
       const res = await fetch("/api/v1/epics", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectKey: project.key, title }),
+        body: JSON.stringify({
+          projectKey: project.key,
+          title,
+          description: extra?.description ?? null,
+          targetDate: extra?.targetDate ?? null,
+        }),
       });
       if (!res.ok) throw new Error((await res.json()).error ?? "Create failed");
       const { epic } = await res.json();
@@ -271,8 +283,10 @@ export function BacklogClient({ data }: { data: BacklogData }) {
         ...prev,
         { ...epic, total: 0, done: 0, completionPct: 0, features: [] },
       ]);
+      return true;
     } catch (e) {
       flash(e instanceof Error ? e.message : "Could not create epic.");
+      return false;
     }
   }
 
@@ -355,7 +369,7 @@ export function BacklogClient({ data }: { data: BacklogData }) {
           setSelectedEpicId(id);
           setCreateType(null);
         }}
-        canEdit={canEdit}
+        canManageEpics={canManageEpics}
         onCreateEpic={handleCreateEpic}
         totalItems={items.length}
       />
@@ -431,8 +445,19 @@ export function BacklogClient({ data }: { data: BacklogData }) {
             </button>
           )}
 
+          {canManageEpics && (
+            <button
+              onClick={() => setShowCreateEpic(true)}
+              className={`${
+                canImport || canUseAi ? "" : "ml-auto"
+              } rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted`}
+            >
+              + Create epic
+            </button>
+          )}
+
           {canEdit && (
-            <div className={`relative ${canUseAi ? "" : "ml-auto"}`}>
+            <div className={`relative ${canUseAi || canManageEpics ? "" : "ml-auto"}`}>
               <button
                 onClick={() => setCreateMenuOpen((v) => !v)}
                 className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
@@ -613,6 +638,20 @@ export function BacklogClient({ data }: { data: BacklogData }) {
             // New items span epics/features with server-generated keys; a full
             // reload is the simplest reliable way to show the updated backlog.
             window.location.reload();
+          }}
+        />
+      )}
+
+      {showCreateEpic && (
+        <CreateEpicModal
+          onClose={() => setShowCreateEpic(false)}
+          onCreate={async (vals) => {
+            const ok = await handleCreateEpic(vals.title, {
+              description: vals.description,
+              targetDate: vals.targetDate,
+            });
+            if (ok) setShowCreateEpic(false);
+            return ok;
           }}
         />
       )}
@@ -852,6 +891,109 @@ function EpicHeader({ epic }: { epic: EpicWithStats }) {
           {epic.targetDate ? new Date(epic.targetDate).toLocaleDateString() : "—"}
         </p>
       )}
+    </div>
+  );
+}
+
+// --- Create epic modal --------------------------------------------------
+
+function CreateEpicModal({
+  onClose,
+  onCreate,
+}: {
+  onClose: () => void;
+  onCreate: (vals: {
+    title: string;
+    description: string | null;
+    targetDate: string | null;
+  }) => Promise<boolean>;
+}) {
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [targetDate, setTargetDate] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    if (!title.trim() || busy) return;
+    setBusy(true);
+    try {
+      await onCreate({
+        title: title.trim(),
+        description: description.trim() || null,
+        targetDate: targetDate || null,
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-md rounded-lg border border-border bg-card shadow-xl">
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <h2 className="text-base font-semibold text-foreground">Create epic</h2>
+          <button
+            onClick={onClose}
+            className="rounded p-1 text-muted-foreground hover:bg-muted"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-3 px-4 py-4">
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+            Title <span className="text-danger">*</span>
+            <input
+              autoFocus
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") save();
+              }}
+              placeholder="Epic title"
+              className="rounded-md border border-input bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-ring"
+            />
+          </label>
+
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+            Description
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              placeholder="What is this epic about? (optional)"
+              className="resize-none rounded-md border border-input bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-ring"
+            />
+          </label>
+
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+            Target date
+            <input
+              type="date"
+              value={targetDate}
+              onChange={(e) => setTargetDate(e.target.value)}
+              className="rounded-md border border-input bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-ring"
+            />
+          </label>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-3">
+          <button
+            onClick={onClose}
+            className="rounded-md border border-border px-4 py-1.5 text-sm text-muted-foreground hover:bg-muted"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={save}
+            disabled={!title.trim() || busy}
+            className="rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
+          >
+            {busy ? "Creating…" : "Create epic"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

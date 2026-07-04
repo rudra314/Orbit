@@ -2,13 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import {
   DndContext,
   DragOverlay,
   PointerSensor,
   closestCorners,
-  useDraggable,
   useDroppable,
   useSensor,
   useSensors,
@@ -25,6 +25,14 @@ import type {
 import { WorkItemCard } from "./WorkItemCard";
 import { QuickAdd } from "./QuickAdd";
 import { FilterBar, DEFAULT_FILTERS, matchesFilters, type Filters } from "./FilterBar";
+
+// dnd-kit's aria-describedby id is generated from a module-level counter
+// (not React's useId()), so it can differ between the server render and the
+// client hydration pass. Loading this client-only avoids the mismatch.
+const DraggableCard = dynamic(
+  () => import("./DraggableCard").then((m) => m.DraggableCard),
+  { ssr: false },
+);
 import { WorkItemDetail } from "./WorkItemDetail";
 
 export function BoardClient({ data }: { data: BoardData }) {
@@ -41,6 +49,7 @@ export function BoardClient({ data }: { data: BoardData }) {
   const [quickAddCol, setQuickAddCol] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [shakeId, setShakeId] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -103,7 +112,13 @@ export function BoardClient({ data }: { data: BoardData }) {
   // --- Mutations (optimistic) ------------------------------------------
 
   async function handleMove(itemId: string, toStatusId: string) {
-    const snapshot = items;
+    // Capture just this card's own original column, not the whole array — a
+    // full-array snapshot goes stale the moment a second card is dragged
+    // before this request resolves, and reverting to it on failure would
+    // wipe out that other card's in-flight optimistic move too.
+    const originalStatusId = items.find((it) => it.id === itemId)?.statusId;
+    if (originalStatusId == null || originalStatusId === toStatusId) return;
+
     setItems((prev) =>
       prev.map((it) => (it.id === itemId ? { ...it, statusId: toStatusId } : it)),
     );
@@ -117,7 +132,12 @@ export function BoardClient({ data }: { data: BoardData }) {
       const { item } = await res.json();
       setItems((prev) => prev.map((it) => (it.id === itemId ? item : it)));
     } catch (e) {
-      setItems(snapshot);
+      console.error("Board move failed:", e);
+      setItems((prev) =>
+        prev.map((it) =>
+          it.id === itemId ? { ...it, statusId: originalStatusId } : it,
+        ),
+      );
       flash(e instanceof Error ? e.message : "Could not move the card.");
     }
   }
@@ -189,6 +209,19 @@ export function BoardClient({ data }: { data: BoardData }) {
     const toStatusId = String(over.id);
     const item = items.find((i) => i.id === itemId);
     if (!item || item.statusId === toStatusId) return;
+
+    // A card may move any number of steps left, but only one step right —
+    // forward progress has to pass through each column. `columns` is already
+    // ordered by displayOrder.
+    const fromIndex = columns.findIndex((c) => c.id === item.statusId);
+    const toIndex = columns.findIndex((c) => c.id === toStatusId);
+    if (fromIndex !== -1 && toIndex !== -1 && toIndex > fromIndex + 1) {
+      setShakeId(itemId);
+      setTimeout(() => setShakeId(null), 400);
+      flash("Cards can only move forward one column at a time.");
+      return;
+    }
+
     handleMove(itemId, toStatusId);
   }
 
@@ -233,6 +266,7 @@ export function BoardClient({ data }: { data: BoardData }) {
                 onCreate={(input) => handleCreate(col.id, input)}
                 members={members}
                 stories={stories}
+                shakeId={shakeId}
                 onCardClick={(id) => openDetail(id, "details")}
                 onLinkClick={(id) => openDetail(id, "links")}
               />
@@ -282,6 +316,7 @@ function Column({
   onCreate,
   members,
   stories,
+  shakeId,
   onCardClick,
   onLinkClick,
 }: {
@@ -299,6 +334,7 @@ function Column({
   }) => Promise<void>;
   members: BoardMember[];
   stories: { id: string; itemKey: string; title: string }[];
+  shakeId: string | null;
   onCardClick: (id: string) => void;
   onLinkClick: (id: string) => void;
 }) {
@@ -343,6 +379,7 @@ function Column({
             key={item.id}
             item={item}
             canEdit={canEdit}
+            shaking={shakeId === item.id}
             onClick={() => onCardClick(item.id)}
             onLinkClick={() => onLinkClick(item.id)}
           />
@@ -353,34 +390,6 @@ function Column({
           </p>
         )}
       </div>
-    </div>
-  );
-}
-
-function DraggableCard({
-  item,
-  canEdit,
-  onClick,
-  onLinkClick,
-}: {
-  item: BoardItem;
-  canEdit: boolean;
-  onClick: () => void;
-  onLinkClick: () => void;
-}) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: item.id,
-    disabled: !canEdit || item.id.startsWith("temp-"),
-  });
-
-  return (
-    <div
-      ref={setNodeRef}
-      {...attributes}
-      {...listeners}
-      style={{ opacity: isDragging ? 0.4 : 1 }}
-    >
-      <WorkItemCard item={item} onClick={onClick} onLinkClick={onLinkClick} />
     </div>
   );
 }

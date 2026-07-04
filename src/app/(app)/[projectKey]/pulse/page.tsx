@@ -6,16 +6,19 @@ import { PulseClient } from "@/components/pulse/PulseClient";
 
 export default async function PulsePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ projectKey: string }>;
+  searchParams: Promise<{ date?: string }>;
 }) {
   const { projectKey } = await params;
+  const { date } = await searchParams;
   const user = await getAuthedUser();
   if (!user) notFound();
 
   let data;
   try {
-    data = await pulseService.getPulsePageData(projectKey, user.id);
+    data = await pulseService.getPulsePageData(projectKey, user.id, date);
   } catch (err) {
     if (err instanceof NotFoundError) notFound();
     throw err;

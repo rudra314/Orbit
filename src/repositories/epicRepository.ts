@@ -24,9 +24,19 @@ export const epicRepository = {
     });
   },
 
-  create(data: { projectId: string; title: string }) {
+  create(data: {
+    projectId: string;
+    title: string;
+    description?: string | null;
+    targetDate?: Date | null;
+  }) {
     return prisma.epic.create({
-      data: { projectId: data.projectId, title: data.title },
+      data: {
+        projectId: data.projectId,
+        title: data.title,
+        description: data.description ?? null,
+        targetDate: data.targetDate ?? null,
+      },
       include: { features: true },
     });
   },

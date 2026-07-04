@@ -6,6 +6,7 @@ import {
   Avatar,
   LINK_TYPE_LABEL,
   LINK_TYPE_ORDER,
+  LINK_TYPE_REVERSE_LABEL,
   TypeIcon,
 } from "./meta";
 
@@ -94,10 +95,18 @@ export function LinksTab({
     return <p className="py-8 text-center text-sm text-muted-foreground">Loading…</p>;
   }
 
-  const grouped = LINK_TYPE_ORDER.map((type) => ({
-    type,
-    rows: links.filter((l) => l.linkType === type),
-  })).filter((g) => g.rows.length > 0);
+  const grouped = LINK_TYPE_ORDER.flatMap((type) => {
+    const out = links.filter((l) => l.linkType === type && l.direction === "out");
+    const inc = links.filter((l) => l.linkType === type && l.direction === "in");
+    return [
+      { key: `${type}-out`, label: LINK_TYPE_LABEL[type], rows: out },
+      {
+        key: `${type}-in`,
+        label: LINK_TYPE_REVERSE_LABEL[type] ?? LINK_TYPE_LABEL[type],
+        rows: inc,
+      },
+    ];
+  }).filter((g) => g.rows.length > 0);
 
   return (
     <div className="space-y-4">
@@ -114,9 +123,9 @@ export function LinksTab({
       )}
 
       {grouped.map((g) => (
-        <div key={g.type}>
+        <div key={g.key}>
           <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {LINK_TYPE_LABEL[g.type]} ({g.rows.length})
+            {g.label} ({g.rows.length})
           </h4>
           <div className="space-y-1.5">
             {g.rows.map((l) => (

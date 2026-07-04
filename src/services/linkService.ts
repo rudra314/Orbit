@@ -1,4 +1,7 @@
-import { linkRepository, type WorkItemLinkRow } from "@/repositories/linkRepository";
+import {
+  linkRepository,
+  type WorkItemLinkRowWithDirection,
+} from "@/repositories/linkRepository";
 import { workItemRepository } from "@/repositories/workItemRepository";
 import { permissionService } from "@/services/permissionService";
 import { NotFoundError } from "@/services/boardService";
@@ -30,18 +33,23 @@ const REVERSE: Partial<Record<LinkType, LinkType>> = {
   IS_DUPLICATED_BY: "DUPLICATES",
 };
 
-function toLinkDto(row: WorkItemLinkRow) {
+function toLinkDto(row: WorkItemLinkRowWithDirection) {
+  // For an outgoing row the "other item" is the target; for an incoming
+  // one-directional row (e.g. this story is the target of a FOUND_IN from a
+  // bug) it's the source — the item itself is never shown as its own link.
+  const other = row.direction === "out" ? row.targetItem : row.sourceItem;
   return {
     id: row.id,
     linkType: row.linkType,
+    direction: row.direction,
     item: {
-      id: row.targetItem.id,
-      itemKey: row.targetItem.itemKey,
-      type: row.targetItem.type,
-      title: row.targetItem.title,
-      statusName: row.targetItem.status.name,
-      statusColor: row.targetItem.status.color,
-      assignee: row.targetItem.assignee,
+      id: other.id,
+      itemKey: other.itemKey,
+      type: other.type,
+      title: other.title,
+      statusName: other.status.name,
+      statusColor: other.status.color,
+      assignee: other.assignee,
     },
   };
 }
