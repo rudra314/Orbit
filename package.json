@@ -11,6 +11,7 @@
     "db:generate": "dotenv -e .env.local -- prisma generate --schema prisma/orbit-schema-v3.prisma",
     "db:migrate": "dotenv -e .env.local -- prisma migrate dev --schema prisma/orbit-schema-v3.prisma",
     "db:seed": "dotenv -e .env.local -- prisma db seed --schema prisma/orbit-schema-v3.prisma",
+    "db:seed:demo": "dotenv -e .env.local -- ts-node prisma/seed-demo.ts",
     "db:studio": "dotenv -e .env.local -- prisma studio --schema prisma/orbit-schema-v3.prisma"
   },
   "prisma": {
