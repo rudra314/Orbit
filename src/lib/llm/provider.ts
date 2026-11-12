@@ -11,6 +11,8 @@ export interface LLMResult {
 export interface LLMProvider {
   // Stable identifier stored on the AiGeneration (e.g. "anthropic").
   readonly name: string;
+  // Model id stored on the AiGeneration (e.g. "claude-sonnet-4-6").
+  readonly model: string;
   // Runs a single completion. `systemPrompt` sets behaviour; `prompt` is the
   // user turn. Returns the text plus token usage.
   // (The agreed interface returns just a string; we widen it to LLMResult so

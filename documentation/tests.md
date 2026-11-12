@@ -2,7 +2,15 @@
 
 ## Existing coverage
 
-**None.** `package.json` has no test framework (no jest/vitest/playwright in `devDependencies`), no `test` script, and no `*.test.*`/`*.spec.*` file exists anywhere in `src/`. Every rule below is either **proposed** or a **gap** — there is no rule in this codebase that a test currently pins. This is itself the top finding of this document.
+Vitest is installed and wired to `npm test` (`vitest run`). **19 tests across 3 files** pass today:
+
+| File | Pins |
+|---|---|
+| `src/services/workItemService.test.ts` | cross-project sprint assignment is rejected on single-item `update()`, matching `bulkUpdate()` |
+| `src/app/auth/callback/route.test.ts` | the post-login `next` param stays same-origin (`isInternalPath`) |
+| `src/lib/llm/openRouterAdapter.test.ts` | missing key → `LLMConfigError`; free-model default and override; text + token usage on success; the request shape sent to `/chat/completions`; HTTP 401/402/403/404 → `LLMConfigError` and 429/5xx → `LLMError`; an error body returned with HTTP 200; an empty completion |
+
+Everything else in the map below is still **proposed** or a **gap**. There is no integration suite against a real database and no browser-level test — the demo walkthrough is driven by an ad-hoc Playwright script, not a committed test.
 
 ## Coverage map
 
@@ -10,12 +18,12 @@
 |---|---|---|---|---|---|
 | Work item create | CONTRIBUTOR+ only | PM/LEAD/CONTRIBUTOR can create; VIEWER/GUEST get `PermissionError` | `permissions.md`, `workItemService.ts:143` | unit | proposed |
 | Work item delete | PM only | PM can delete; LEAD/CONTRIBUTOR get `PermissionError` | `permissions.md`, `workItemService.ts:248` | unit | proposed |
-| Cross-project sprint assignment | a work item's `sprintId` must belong to the same project | connecting a sprint from another project must throw `ValidationError`, mirroring the check already present in `bulkUpdate` | `permissions.md` gap; **confirmed security finding**, `workItemService.ts:204-209` (single-item `update()` has no check; `workItemService.ts:281-284` `bulkUpdate()` does) | integration (deterministic, local DB) | **none — confirmed unpatched bug** |
+| Cross-project sprint assignment | a work item's `sprintId` must belong to the same project | connecting a sprint from another project must throw `ValidationError`, mirroring the check already present in `bulkUpdate` | `permissions.md` gap; **confirmed security finding**, `workItemService.ts:204-209` (single-item `update()` has no check; `workItemService.ts:281-284` `bulkUpdate()` does) | unit | ✅ covered — `workItemService.test.ts` |
 | AI approval role gate | `assertCanUseAi` — PM/LEAD only | CONTRIBUTOR/VIEWER calling `approveGeneration` gets `PermissionError` | `automation.md`, `aiService.ts:330` | unit | proposed |
 | AI approval idempotency | approving a non-`DRAFT` generation is rejected | second approval attempt on an already-`APPROVED`/`REJECTED` generation throws `ValidationError`, no duplicate entities created | `flows.md` §4, `aiService.ts:331-333` | integration (deterministic) | proposed |
 | AI approval respects `approvalRule` | project configured `ANY_REVIEWER` should allow non-PM/LEAD approval | **currently always fails** — code hardcodes PM/LEAD regardless of config | `automation.md`, `permissions.md` gap | integration | **none — documented-vs-implemented gap, not yet fixed** |
 | AI budget enforcement | `tokenBudget`/`costBudget` should cap generation spend | generation should refuse once budget exceeded | `automation.md` | integration (deterministic, mocked provider) | **none — unimplemented** |
-| Login redirect (`next` param) | post-login redirect must stay same-origin | a `next` value that resolves to a different origin (e.g. `@evil.com` userinfo trick) must be rejected/normalized to `/`, not passed to `NextResponse.redirect` | **confirmed security finding**, `src/app/auth/callback/route.ts:12,30` | unit (extract a `isSafeRedirect(next, origin)` helper) + integration (route-level) | **none — confirmed unpatched bug** |
+| Login redirect (`next` param) | post-login redirect must stay same-origin | a `next` value that resolves to a different origin (e.g. `@evil.com` userinfo trick) must be rejected/normalized to `/`, not passed to `NextResponse.redirect` | **confirmed security finding**, `src/app/auth/callback/route.ts:12,30` | unit | ✅ covered — `auth/callback/route.test.ts` (`isInternalPath`) |
 | Comment edit ownership | only the author (within a 15-min window) or a PM may edit/delete another's comment | non-author, non-PM caller outside the window gets `PermissionError` | `permissions.md`, `commentService.ts:120-154` | unit | proposed |
 | Notification read scoping | a user can only mark their own notifications read | `markRead` with another user's notification id is a no-op (0 rows affected), not an error leak | `permissions.md`, `notificationRepository.ts:51-56` | integration (deterministic, local DB) | proposed |
 | Pulse submit role gate | PM/LEAD/CONTRIBUTOR only | VIEWER/GUEST get `PermissionError` | `permissions.md`, `pulseService.ts:211` | unit | proposed |

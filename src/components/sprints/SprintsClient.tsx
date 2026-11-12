@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { daysRemaining as daysLeft } from "@/lib/projectMetrics";
 import {
   DndContext,
   DragOverlay,
@@ -27,6 +28,9 @@ import type { Capacity, SprintDTO, SprintsData } from "./types";
 
 // ---- helpers ----------------------------------------------------------
 
+// Span in whole days between two dates — used for sprint *duration* (start→end).
+// For "days left from now" use daysRemaining from @/lib/projectMetrics so this
+// page and the dashboard never disagree.
 function daysBetween(a: Date, b: Date) {
   return Math.round((b.getTime() - a.getTime()) / 86_400_000);
 }
@@ -438,7 +442,7 @@ function ActiveSprintView({
 }) {
   const today = new Date();
   const end = sprint.endDate ? new Date(sprint.endDate) : null;
-  const daysRemaining = end ? Math.max(0, daysBetween(today, end)) : null;
+  const daysRemaining = daysLeft(end, today);
 
   return (
     <div className="rounded-lg border border-primary/40 bg-card">

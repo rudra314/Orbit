@@ -3,10 +3,12 @@
 import { usePathname } from "next/navigation";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { sectionLabel } from "@/lib/sections";
 
+// /ACP/pulse/digest → "pulse/digest" → "Team Digest"
 function titleFromPath(pathname: string) {
-  const last = pathname.split("/").filter(Boolean).pop() ?? "";
-  return last.charAt(0).toUpperCase() + last.slice(1);
+  const [, , ...section] = pathname.split("/");
+  return sectionLabel(section.join("/"));
 }
 
 export function Topbar({ user }: { user: { name: string; email: string } }) {
