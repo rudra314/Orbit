@@ -1,5 +1,6 @@
 "use client";
 
+import { prettyEnum as pretty } from "@/lib/labels";
 import { useState } from "react";
 
 const ROLES = ["PM", "LEAD", "CONTRIBUTOR", "VIEWER"] as const;
@@ -16,10 +17,6 @@ const DISCIPLINES = [
 
 const inputCls =
   "w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-ring";
-
-function pretty(v: string) {
-  return v.charAt(0) + v.slice(1).toLowerCase();
-}
 
 export function InviteModal({
   projectId,

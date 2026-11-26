@@ -6,7 +6,7 @@ import { projectMemberRepository } from "@/repositories/projectMemberRepository"
 import { sprintRepository } from "@/repositories/sprintRepository";
 import { aiGenerationRepository } from "@/repositories/aiGenerationRepository";
 import { NotFoundError, toBoardItem, type BoardItem } from "@/services/boardService";
-import { ANTHROPIC_MODEL_LABEL } from "@/lib/llm/anthropicAdapter";
+import { describeProvider } from "@/lib/llm/providerFactory";
 import type { StatusCategory } from "@prisma/client";
 
 type DerivedStatus = "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED";
@@ -110,7 +110,7 @@ export const backlogService = {
       canManageEpics: member ? ["PM", "LEAD"].includes(member.role) : false,
       aiEnabled: !!aiConfig && aiConfig.aiMode !== "DISABLED",
       canUseAi: member ? ["PM", "LEAD"].includes(member.role) : false,
-      aiModelLabel: ANTHROPIC_MODEL_LABEL,
+      aiModelLabel: describeProvider().modelLabel,
     };
   },
 };

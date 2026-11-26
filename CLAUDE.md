@@ -19,7 +19,7 @@ Next: Session 12B — Docker, deploy, demo prep.
 - `documentation/emails.md` — the invite-email path
 - `documentation/tests.md` — test-coverage map
 
-These docs record several **documented-vs-implemented gaps** in this file's own "target design" sections below — check the doc before assuming schema-described behavior is actually live: `ProjectAiConfig.approvalRule`/`.secretRef`/`.tokenBudget`/`.costBudget` are schema fields not read by any code; `OrgRole` is not enforced anywhere (all real authorization is `ProjectRole`); only the Anthropic LLM provider is wired despite the stack section below describing three; there is no real cron/scheduler, only a client-poll-triggered outbox drain (`documentation/cron.md`); there is no automated test suite yet.
+These docs record several **documented-vs-implemented gaps** in this file's own "target design" sections below — check the doc before assuming schema-described behavior is actually live: `ProjectAiConfig.approvalRule`/`.secretRef`/`.tokenBudget`/`.costBudget` are schema fields not read by any code; `OrgRole` is not enforced anywhere (all real authorization is `ProjectRole`); only Anthropic and OpenRouter are wired — no dedicated Ollama adapter; there is no real cron/scheduler, only a client-poll-triggered outbox drain (`documentation/cron.md`); the test suite is thin (19 vitest tests over 3 files — see `documentation/tests.md`).
 
 ## Guardrails for AI coding agents
 
@@ -63,7 +63,7 @@ These docs record several **documented-vs-implemented gaps** in this file's own 
 - Next.js 16 App Router + TypeScript + Tailwind CSS v4, React 19
 - PostgreSQL with Prisma ORM 6 (`provider = "postgresql"`, `url = env("DATABASE_URL")`, migrations via `DIRECT_URL`)
 - dnd-kit for board drag-and-drop
-- LLM: `src/lib/llm/` currently wires **only Anthropic** (`@anthropic-ai/sdk`, model `claude-sonnet-4-6`) via a global `ANTHROPIC_API_KEY`/`LLM_PROVIDER` env pair. The schema's per-project `ProjectAiConfig.provider`/`.secretRef` fields exist but are not read — see `documentation/automation.md` and `documentation/variables.md` before assuming Ollama/OpenAI-compatible or per-project keys work.
+- LLM: `src/lib/llm/` wires **Anthropic** (`@anthropic-ai/sdk`, model `claude-sonnet-4-6`) and **OpenRouter** (dependency-free `fetch` against the OpenAI-compatible endpoint, free-model default), selected by a global `LLM_PROVIDER` env var (`anthropic` | `openrouter`). The schema's per-project `ProjectAiConfig.provider`/`.secretRef` fields exist but are not read — see `documentation/automation.md` and `documentation/variables.md` before assuming Ollama/OpenAI-compatible or per-project keys work.
 - Auth: Supabase magic-link only (`@supabase/ssr`), no passwords. `User.provider = magic_link`; M365 integration (`provider_user_id` holding the M365 oid) is schema-ready but not implemented. See `documentation/architecture.md`.
 
 ## Common service patterns (as implemented)
@@ -78,7 +78,8 @@ The schema is at the **non-default** path `prisma/orbit-schema-v3.prisma`. `pack
 - `npm run db:migrate` — `prisma migrate dev`
 - `npm run db:seed` — `prisma db seed` (seed script: `prisma/seed.ts`, configured via `"prisma": {"seed": ...}` in `package.json`)
 - `npm run db:studio` — `prisma studio`
-- App commands: `npm run dev` / `npm run build` / `npm run start` / `npm run lint`. **No test command exists** — no test framework is installed and no test files exist (`documentation/tests.md`).
+- `npm run db:seed:demo` — seeds the `ACP` demo project used for walkthroughs (`prisma/seed-demo.ts`, idempotent, dates relative to the run date)
+- App commands: `npm run dev` / `npm run build` / `npm run start` / `npm run lint` / `npm test` (vitest). Deployment steps are in `documentation/deployment.md`.
 
 ## Roles
 Project roles: `PM` (full control) > `LEAD` (manage sprints, estimate) > `CONTRIBUTOR` (edit assigned work, update status) > `VIEWER` (read-only) > `GUEST`. Delete operations are PM only. AI approval is currently hardcoded to PM/LEAD regardless of the project's `approvalRule` (see above). Org-level roles (`OWNER | ADMIN | MEMBER`) exist in the schema but are **not enforced by any code path** — see `documentation/permissions.md`.

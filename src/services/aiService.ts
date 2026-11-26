@@ -8,7 +8,6 @@ import { permissionService } from "@/services/permissionService";
 import { NotFoundError } from "@/services/boardService";
 import { ValidationError } from "@/services/projectService";
 import { getProvider } from "@/lib/llm/providerFactory";
-import { ANTHROPIC_MODEL } from "@/lib/llm/anthropicAdapter";
 import { LLMError } from "@/lib/llm/errors";
 import type { LLMProvider } from "@/lib/llm/provider";
 import type { AiGenerationStatus, Priority } from "@prisma/client";
@@ -301,7 +300,7 @@ export const aiService = {
       projectId: project.id,
       generatedById: input.actorUserId,
       provider: provider.name,
-      model: ANTHROPIC_MODEL,
+      model: provider.model,
       promptVersion: PROMPT_VERSION,
       inputText,
       generatedJson: { epics },

@@ -1,5 +1,6 @@
 "use client";
 
+import { prettyEnum as pretty } from "@/lib/labels";
 import { useState } from "react";
 import { Avatar } from "@/components/board/meta";
 import type {
@@ -22,10 +23,6 @@ const DISCIPLINES = [
 ] as const;
 
 const LEAD_ASSIGNABLE = new Set(["CONTRIBUTOR", "VIEWER"]);
-
-function pretty(v: string) {
-  return v.charAt(0) + v.slice(1).toLowerCase();
-}
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, {

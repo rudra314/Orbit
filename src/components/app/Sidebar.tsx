@@ -3,22 +3,25 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { OrbitMark } from "@/components/OrbitMark";
+import { sectionLabel } from "@/lib/sections";
 
-// [slug, label, icon] — icon shows in the collapsed (icon-only) rail below xl.
+// [slug, icon] — icon shows in the collapsed (icon-only) rail below xl.
+// Labels come from src/lib/sections.ts, shared with the topbar heading.
 const NAV = [
-  ["board", "Board", "▦"],
-  ["backlog", "Backlog", "☰"],
-  ["sprints", "Sprints", "▻"],
-  ["ai-review", "AI Review", "✦"],
-  ["deliverables", "Deliverables", "📦"],
-  ["documents", "Documents", "📄"],
-  ["reports", "Reports", "📊"],
-  ["pulse/digest", "Team Digest", "👥"],
-  ["dashboard", "Dashboard", "📈"],
-  ["activity", "Activity", "🕒"],
-  ["pulse", "Daily Pulse", "📋"],
-  ["audit", "Audit", "🛡"],
-  ["settings", "Settings", "⚙"],
+  ["board", "▦"],
+  ["backlog", "☰"],
+  ["sprints", "▻"],
+  ["ai-review", "✦"],
+  ["deliverables", "📦"],
+  // "documents" (SOW upload + parsing) is deliberately out of v1 — requirements
+  // are pasted straight into the AI generate modal. Re-add when it ships.
+  ["reports", "📊"],
+  ["pulse/digest", "👥"],
+  ["dashboard", "📈"],
+  ["activity", "🕒"],
+  ["pulse", "📋"],
+  ["audit", "🛡"],
+  ["settings", "⚙"],
 ] as const;
 
 const PULSE_DOT_COLOR: Record<"submitted" | "pending" | "overdue", string | null> = {
@@ -69,7 +72,8 @@ export function Sidebar({
       </div>
 
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-3">
-        {NAV.map(([slug, label, icon]) => {
+        {NAV.map(([slug, icon]) => {
+          const label = sectionLabel(slug);
           const href = `/${currentKey}/${slug}`;
           const active = pathname === href;
           return (
